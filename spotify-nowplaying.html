@@ -10,6 +10,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ec742c'/%3E%3Cpath d='M13 8.5v10.2a3.4 3.4 0 1 0 2.2 3.2V13l7 -2v6.4a3.4 3.4 0 1 0 2.2 3.2V6.5l-11.4 2z' fill='%23fbf9f1'/%3E%3C/svg%3E">
 <title>Now Playing — Overlay multi-lecteurs (Streamer.bot)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,6 +186,40 @@
   body.layout-text #progressWrap { margin-top: 9px; }
   /* En texte seul, l'état pause se lit sur l'opacité (pas de badge sur une pochette absente) */
   body.layout-text #card.paused #info { opacity: 0.72; transition: opacity 0.3s ease; }
+
+  /* --- Variante ULTRA-MINIMALE (?layout=bare) : aucune carte, aucun fond, aucune barre.
+     Juste une ligne « Titre — Artiste » posée sur l'image du stream. --- */
+  body.layout-bare #card {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  body.layout-bare #media,
+  body.layout-bare #progressWrap { display: none; }
+  body.layout-bare #info {
+    padding: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  body.layout-bare #trackName {
+    -webkit-line-clamp: 1;
+    min-height: 0;
+    font-size: 17px;
+    white-space: nowrap;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75);
+  }
+  body.layout-bare #artists {
+    margin-top: 0;
+    font-size: 14px;
+    opacity: 0.85;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.75);
+  }
+  body.layout-bare #artists::before { content: '— '; opacity: 0.6; }
+  body.layout-bare #card.paused #info { opacity: 0.6; transition: opacity 0.3s ease; }
+  /* Une pastille discrète « ♪ » devant le titre, pour signaler qu'il s'agit de musique */
+  body.layout-bare #trackName::before { content: '♪ '; opacity: 0.75; }
 
   /* --- Canvas vidéo (V2) : remplit le cadre média, au-dessus du fond flouté, sous le badge.
      Affiché seulement si un canvasUrl .mp4 est reçu/récupéré ; sinon on garde pochette + fond. --- */
@@ -416,6 +451,9 @@ const CONFIG = {
   } else if (layout === 'text') {
     document.body.classList.add('layout-text');
     if (!q.has('w')) document.documentElement.style.setProperty('--card-w', '320px');
+  } else if (layout === 'bare') {
+    document.body.classList.add('layout-bare');
+    if (!q.has('w')) document.documentElement.style.setProperty('--card-w', 'auto');
   }
   if (q.has('canvasApi')) CONFIG.canvasApi = q.get('canvasApi');
   // MODE DIRECT : l'identifiant est MÉMORISÉ localement dès qu'il est fourni.
@@ -1032,15 +1070,65 @@ function startDirectMode() {
     renderDiag();
     return;
   }
+
+  // ── Reprise d'une connexion existante (?token=) ──
+  // Évite de refaire l'autorisation dans la fenêtre « Interagir » d'OBS : on autorise UNE
+  // fois dans un vrai navigateur, on récupère le jeton (?showToken=1) et on le passe ici.
+  if (q.has('token')) {
+    saveTokens({ access: '', refresh: q.get('token').trim(), exp: 0 });
+    const keep = new URLSearchParams(location.search);
+    keep.delete('token');                       // on le retire de l'adresse affichée
+    const qs = keep.toString();
+    history.replaceState({}, '', redirectUri() + (qs ? '?' + qs : ''));
+    pollOnce();
+    return;
+  }
+
   if (q.has('code')) {                                    // retour d'autorisation
-    exchangeCode(q.get('code')).then(pollOnce).catch(function (e) {
+    exchangeCode(q.get('code')).then(function () {
+      if (q.has('showToken') || new URLSearchParams(location.search).has('showToken')) showTokenPanel();
+      pollOnce();
+    }).catch(function (e) {
       diag.ws = 'Autorisation échouée : ' + e.message;
       renderDiag();
     });
     return;
   }
   if (!loadTokens()) { beginAuth(); return; }             // première fois : on demande l'accord
+  if (q.has('showToken')) showTokenPanel();
   pollOnce();
+}
+
+// Affiche l'adresse prête à coller dans OBS (avec le jeton), pour ne pas avoir à se
+// reconnecter dans le navigateur d'OBS. À utiliser dans un vrai navigateur uniquement.
+function showTokenPanel() {
+  const t = loadTokens();
+  if (!t || !t.refresh) return;
+  const keep = new URLSearchParams(location.search);
+  ['showToken', 'code', 'state', 'debug'].forEach(function (k) { keep.delete(k); });
+  keep.set('token', t.refresh);
+  const url = redirectUri() + '?' + keep.toString();
+
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:auto 16px 16px 16px;z-index:99999;background:#1b1b1d;' +
+    'color:#fbf9f1;font-family:Poppins,sans-serif;font-size:13px;padding:16px 18px;border-radius:14px;' +
+    'box-shadow:0 12px 40px rgba(0,0,0,.5);line-height:1.6;';
+  box.innerHTML =
+    '<b>Adresse à coller dans OBS</b><br>' +
+    '<span style="opacity:.75">Elle contient votre connexion : plus besoin de vous identifier ' +
+    'dans la fenêtre « Interagir ». À garder pour vous.</span>' +
+    '<textarea readonly style="width:100%;height:64px;margin-top:10px;background:#111;color:#fbf9f1;' +
+    'border:1px solid rgba(251,249,241,.2);border-radius:8px;padding:8px;font-family:monospace;' +
+    'font-size:12px">' + url + '</textarea>' +
+    '<button style="margin-top:8px;padding:8px 14px;border:0;border-radius:8px;background:#ec742c;' +
+    'color:#fff;font-family:inherit;font-weight:600;cursor:pointer">Copier</button>';
+  box.querySelector('button').onclick = function () {
+    const ta = box.querySelector('textarea');
+    ta.select();
+    navigator.clipboard.writeText(url).catch(function () { document.execCommand('copy'); });
+    this.textContent = 'Copié ✓';
+  };
+  document.body.appendChild(box);
 }
 
 /* ----- Démarrage ----- */

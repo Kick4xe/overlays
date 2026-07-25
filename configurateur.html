@@ -9,6 +9,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ec742c'/%3E%3Cpath d='M13 8.5v10.2a3.4 3.4 0 1 0 2.2 3.2V13l7 -2v6.4a3.4 3.4 0 1 0 2.2 3.2V6.5l-11.4 2z' fill='%23fbf9f1'/%3E%3C/svg%3E">
 <title>Now Playing — Configurateur</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -48,9 +49,22 @@
   <div class="wrap">
     <div>
       <fieldset>
-        <legend>FICHIER</legend>
-        <label>Nom du fichier de l'overlay (dans le même dossier)</label>
+        <legend>ADRESSE</legend>
+        <label>Adresse d'hébergement (dossier où se trouve l'overlay)</label>
+        <input id="base" value="https://kick4xe.github.io/overlays/">
+        <label>Nom du fichier</label>
         <input id="file" value="spotify-nowplaying.html">
+      </fieldset>
+
+      <fieldset>
+        <legend>STYLES PRÉRÉGLÉS</legend>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button type="button" class="ghost" onclick="applyPreset('carte')">Carte Kickaxe</button>
+          <button type="button" class="ghost" onclick="applyPreset('bandeau')">Bandeau discret</button>
+          <button type="button" class="ghost" onclick="applyPreset('texte')">Texte sobre</button>
+          <button type="button" class="ghost" onclick="applyPreset('nu')">Ultra-minimal</button>
+        </div>
+        <p class="hint" style="margin-top:8px">Un point de départ en un clic — tout reste modifiable ensuite.</p>
       </fieldset>
 
       <fieldset>
@@ -61,6 +75,7 @@
           <option value="horizontal">Bandeau horizontal</option>
           <option value="mini">Bandeau minimaliste</option>
           <option value="text">Texte seul (sans pochette)</option>
+          <option value="bare">Ultra-minimal (sans cadre)</option>
         </select>
         <div id="coverRow" style="display:none">
           <label>Taille de la pochette (px)</label>
@@ -145,6 +160,11 @@
         <legend>COMPORTEMENT</legend>
         <label>Identifiant Spotify (mode direct, sans Streamer.bot)</label>
         <input id="clientId" placeholder="Client ID de votre app Spotify">
+        <button type="button" class="ghost" style="margin-top:8px;width:100%" onclick="openAuth()">
+          1. Connecter Spotify (ouvre un onglet)
+        </button>
+        <label>2. Jeton obtenu (colle ici l'adresse ou le jeton copié)</label>
+        <input id="token" placeholder="colle ici — le jeton sera extrait automatiquement">
         <label>Masquer après une pause (ms, 0 = jamais)</label>
         <input id="hidePaused" type="number" value="3000" step="500" min="0">
         <label>Décalage de la barre (ms) 
@@ -167,9 +187,12 @@
           <button class="ghost" onclick="preview()">Aperçu (démo)</button>
         </div>
         <p class="hint">
-          Dans OBS : source <b>Navigateur</b> → cochez <b>Fichier local</b> → choisissez le fichier,
-          puis <b>collez la partie après le nom du fichier</b> (à partir du « ? ») dans le champ URL,
-          juste après le chemin. Largeur ~<span id="obsw">300</span>, hauteur ~<span id="obsh">520</span>.
+          Dans OBS : source <b>Navigateur</b> → collez cette adresse complète dans le champ URL.
+          Largeur ~<span id="obsw">300</span>, hauteur ~<span id="obsh">520</span>.
+          Décochez « Arrêter la source lorsqu'elle n'est pas visible ».
+          <br><b>Mode direct</b> : renseignez l'identifiant, cliquez « Connecter Spotify »,
+          autorisez dans l'onglet qui s'ouvre, puis collez l'adresse obtenue dans le champ
+          « Jeton » — l'adresse ci-dessus contiendra alors la connexion (à garder privée).
           <br>L'aperçu ci-dessous utilise des fausses pistes : il ne nécessite ni Spotify ni Streamer.bot.
         </p>
       </div>
@@ -183,7 +206,7 @@
 
 <script>
 "use strict";
-const ids = ['file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','clientId','host','port','player'];
+const ids = ['base','file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','clientId','token','host','port','player'];
 const $ = id => document.getElementById(id);
 const hex = v => (v || '').replace(/^#/, '');
 
@@ -191,7 +214,7 @@ function buildQuery(withTest) {
   const p = [];
   if (withTest) p.push('test=1');
   const layout = $('layout').value; if (layout) p.push('layout=' + layout);
-  const defW = layout === 'mini' ? '300' : (layout === 'horizontal' ? '340' : (layout === 'text' ? '320' : '240'));
+  const defW = layout === 'mini' ? '300' : (layout === 'horizontal' ? '340' : (layout === 'text' ? '320' : (layout === 'bare' ? '420' : '240')));
   const w = $('w').value;            if (w && w !== defW) p.push('w=' + w);
   const cover = $('cover').value;
   if ((layout === 'horizontal' || layout === 'mini') && cover &&
@@ -211,9 +234,43 @@ function buildQuery(withTest) {
   if ($('shadow').value === '0') p.push('shadow=0');
   const blur = $('blur').value;          if (blur && blur !== '22') p.push('blur=' + blur);
   const cid = $('clientId').value.trim();  if (cid) p.push('clientId=' + encodeURIComponent(cid));
+  // Le jeton peut être collé seul OU sous forme d'adresse complète : on extrait ce qu'il faut
+  const rawTok = $('token').value.trim();
+  const tok = rawTok.indexOf('token=') >= 0 ? decodeURIComponent(rawTok.split('token=')[1].split('&')[0]) : rawTok;
+  if (tok && !withTest) p.push('token=' + encodeURIComponent(tok));
   const host = $('host').value.trim();   if (host && host !== '127.0.0.1') p.push('host=' + host);
   const port = $('port').value;          if (port && port !== '8080') p.push('port=' + port);
   return p.length ? '?' + p.join('&') : '';
+}
+
+// Styles préréglés : un point de départ crédible, pas une camisole (tout reste modifiable)
+const PRESETS = {
+  carte:   { layout: '',           w: 240, align: '',       bar: '',  times: '',  shadow: '',  radius: 18 },
+  bandeau: { layout: 'horizontal', w: 340, align: '',       bar: '',  times: '0', shadow: '',  radius: 14 },
+  texte:   { layout: 'text',       w: 320, align: '',       bar: '',  times: '0', shadow: '',  radius: 12 },
+  nu:      { layout: 'bare',       w: 420, align: '',       bar: '0', times: '0', shadow: '0', radius: 0  }
+};
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  Object.keys(p).forEach(function (k) { if ($(k)) $(k).value = p[k]; });
+  render(); preview();
+}
+
+function fullUrl(q) {
+  let base = $('base').value.trim();
+  if (base && base.slice(-1) !== '/') base += '/';
+  return base + $('file').value.trim() + q;
+}
+
+// Étape 1 du mode direct : ouvre l'overlay avec l'autorisation + affichage du jeton
+function openAuth() {
+  const cid = $('clientId').value.trim();
+  if (!cid) { alert("Renseignez d'abord l'identifiant Spotify (Client ID)."); return; }
+  let base = $('base').value.trim();
+  if (base && base.slice(-1) !== '/') base += '/';
+  window.open(base + $('file').value.trim() +
+    '?clientId=' + encodeURIComponent(cid) + '&showToken=1', '_blank');
 }
 
 function render() {
@@ -225,10 +282,10 @@ function render() {
   $('media').parentElement.style.opacity = layout ? .45 : 1;
 
   const q = buildQuery(false);
-  $('url').textContent = $('file').value + q;
+  $('url').textContent = fullUrl(q);
 
   // Dimensions conseillées de la source OBS
-  const defW = layout === 'mini' ? 300 : (layout === 'horizontal' ? 340 : (layout === 'text' ? 320 : 240));
+  const defW = layout === 'mini' ? 300 : (layout === 'horizontal' ? 340 : (layout === 'text' ? 320 : (layout === 'bare' ? 420 : 240)));
   const w = parseInt($('w').value, 10) || defW;
   let h;
   if (isBanner) {
@@ -236,6 +293,8 @@ function render() {
     h = Math.max(side, layout === 'mini' ? 60 : 84) + 40;
   } else if (layout === 'text') {
     h = 130;
+  } else if (layout === 'bare') {
+    h = 80;
   } else {
     const m = $('media').value;
     const ratio = m === 'square' ? 1 : (m === 'portrait' ? 16 / 9 : 4 / 3);
@@ -328,7 +387,7 @@ function copyUrl() {
     .catch(() => alert('Copie impossible — sélectionnez le texte à la main.'));
 }
 
-function preview() { $('prev').src = $('file').value + buildQuery(true); }
+function preview() { $('prev').src = fullUrl(buildQuery(true)); }
 
 ids.forEach(id => {
   $(id).addEventListener('input', render);
@@ -337,7 +396,7 @@ ids.forEach(id => {
 // Changer de mise en page réinitialise la largeur sur le défaut de cette mise en page
 $('layout').addEventListener('change', function () {
   const l = $('layout').value;
-  $('w').value = l === 'mini' ? 300 : (l === 'horizontal' ? 340 : (l === 'text' ? 320 : 240));
+  $('w').value = l === 'mini' ? 300 : (l === 'horizontal' ? 340 : (l === 'text' ? 320 : (l === 'bare' ? 420 : 240)));
   $('cover').value = l === 'mini' ? 60 : 84;
   render(); preview();
 });
