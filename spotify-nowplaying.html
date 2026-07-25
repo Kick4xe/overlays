@@ -418,7 +418,22 @@ const CONFIG = {
     if (!q.has('w')) document.documentElement.style.setProperty('--card-w', '320px');
   }
   if (q.has('canvasApi')) CONFIG.canvasApi = q.get('canvasApi');
-  if (q.has('clientId')) CONFIG.clientId = q.get('clientId').trim();
+  // MODE DIRECT : l'identifiant est MÉMORISÉ localement dès qu'il est fourni.
+  // Indispensable : au retour de l'autorisation, Spotify renvoie sur l'adresse déclarée
+  // (sans paramètres) — sans mémorisation, le widget « oublierait » le mode direct et
+  // retomberait sur le WebSocket.
+  if (q.has('clientId')) {
+    CONFIG.clientId = q.get('clientId').trim();
+    try { localStorage.setItem('kx_np_client', CONFIG.clientId); } catch (e) { /* noop */ }
+  } else {
+    try { CONFIG.clientId = localStorage.getItem('kx_np_client') || ''; } catch (e) { /* noop */ }
+  }
+  // Idem pour le diagnostic : pratique pour suivre le retour d'autorisation
+  if (q.has('debug')) {
+    try { localStorage.setItem('kx_np_debug', CONFIG.debug ? '1' : '0'); } catch (e) { /* noop */ }
+  } else {
+    try { if (localStorage.getItem('kx_np_debug') === '1') CONFIG.debug = true; } catch (e) { /* noop */ }
+  }
   if (q.has('poll')) CONFIG.pollMs = Math.max(1000, num(q.get('poll'), 2000));
   if (q.has('offset')) CONFIG.offsetMs = num(q.get('offset'), 0);
   if (q.get('bar') === '0') document.body.classList.add('no-bar');
@@ -678,11 +693,14 @@ function tick() {
 requestAnimationFrame(tick);
 
 /* ----- Debug ----- */
+const WIDGET_VERSION = '2026-07-25 · mode direct';
 const diag = { ws: 'jamais connecté', msgTotal: 0, msgReco: 0, lastTypes: [], lastRaw: null };
 
 function renderDiag() {
   if (!CONFIG.debug) return;
   const head =
+    'Version   : ' + WIDGET_VERSION + '\n' +
+    'Mode      : ' + (CONFIG.test ? 'TEST' : (CONFIG.clientId ? 'DIRECT (Spotify)' : 'Streamer.bot')) + '\n' +
     'WebSocket : ' + diag.ws + '\n' +
     'URL       : ws://' + CONFIG.host + ':' + CONFIG.port + CONFIG.endpoint + '\n' +
     'Messages reçus : ' + diag.msgTotal + '   |   reconnus : ' + diag.msgReco + '\n' +
