@@ -698,14 +698,17 @@ const diag = { ws: 'jamais connecté', msgTotal: 0, msgReco: 0, lastTypes: [], l
 
 function renderDiag() {
   if (!CONFIG.debug) return;
+  const direct = !!CONFIG.clientId && !CONFIG.test;
   const head =
     'Version   : ' + WIDGET_VERSION + '\n' +
-    'Mode      : ' + (CONFIG.test ? 'TEST' : (CONFIG.clientId ? 'DIRECT (Spotify)' : 'Streamer.bot')) + '\n' +
-    'WebSocket : ' + diag.ws + '\n' +
-    'URL       : ws://' + CONFIG.host + ':' + CONFIG.port + CONFIG.endpoint + '\n' +
-    'Messages reçus : ' + diag.msgTotal + '   |   reconnus : ' + diag.msgReco + '\n' +
-    'Derniers événements : ' + (diag.lastTypes.length ? diag.lastTypes.join(', ') : '(aucun)') +
-    '\n----------------------------------------\n';
+    'Mode      : ' + (CONFIG.test ? 'TEST' : (direct ? 'DIRECT (Spotify)' : 'Streamer.bot')) + '\n' +
+    'État      : ' + diag.ws + '\n' +
+    (direct ? 'Interrogation : toutes les ' + CONFIG.pollMs + ' ms\n'
+            : 'URL       : ws://' + CONFIG.host + ':' + CONFIG.port + CONFIG.endpoint + '\n') +
+    (direct ? 'Relevés : ' + diag.msgTotal + '\n'
+            : 'Messages reçus : ' + diag.msgTotal + '   |   reconnus : ' + diag.msgReco + '\n' +
+              'Derniers événements : ' + (diag.lastTypes.length ? diag.lastTypes.join(', ') : '(aucun)') + '\n') +
+    '----------------------------------------\n';
   let body;
   try { body = diag.lastRaw ? JSON.stringify(diag.lastRaw, null, 2) : '(aucun message reçu pour l\'instant)'; }
   catch (e) { body = '(message non sérialisable)'; }
