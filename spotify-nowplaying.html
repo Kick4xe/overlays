@@ -428,11 +428,10 @@ const CONFIG = {
   } else {
     try { CONFIG.clientId = localStorage.getItem('kx_np_client') || ''; } catch (e) { /* noop */ }
   }
-  // Idem pour le diagnostic : pratique pour suivre le retour d'autorisation
-  if (q.has('debug')) {
-    try { localStorage.setItem('kx_np_debug', CONFIG.debug ? '1' : '0'); } catch (e) { /* noop */ }
-  } else {
-    try { if (localStorage.getItem('kx_np_debug') === '1') CONFIG.debug = true; } catch (e) { /* noop */ }
+  // Le diagnostic ne se mémorise PAS (sinon il resterait affiché à l'écran en permanence) :
+  // il s'active uniquement via ?debug=1. `?debug=0` efface un éventuel réglage hérité.
+  if (q.get('debug') === '0') {
+    try { localStorage.removeItem('kx_np_debug'); } catch (e) { /* noop */ }
   }
   if (q.has('poll')) CONFIG.pollMs = Math.max(1000, num(q.get('poll'), 2000));
   if (q.has('offset')) CONFIG.offsetMs = num(q.get('offset'), 0);

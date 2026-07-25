@@ -143,6 +143,8 @@
 
       <fieldset>
         <legend>COMPORTEMENT</legend>
+        <label>Identifiant Spotify (mode direct, sans Streamer.bot)</label>
+        <input id="clientId" placeholder="Client ID de votre app Spotify">
         <label>Masquer après une pause (ms, 0 = jamais)</label>
         <input id="hidePaused" type="number" value="3000" step="500" min="0">
         <label>Décalage de la barre (ms) 
@@ -181,7 +183,7 @@
 
 <script>
 "use strict";
-const ids = ['file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','host','port','player'];
+const ids = ['file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','clientId','host','port','player'];
 const $ = id => document.getElementById(id);
 const hex = v => (v || '').replace(/^#/, '');
 
@@ -208,6 +210,7 @@ function buildQuery(withTest) {
   if ($('times').value === '0')  p.push('times=0');
   if ($('shadow').value === '0') p.push('shadow=0');
   const blur = $('blur').value;          if (blur && blur !== '22') p.push('blur=' + blur);
+  const cid = $('clientId').value.trim();  if (cid) p.push('clientId=' + encodeURIComponent(cid));
   const host = $('host').value.trim();   if (host && host !== '127.0.0.1') p.push('host=' + host);
   const port = $('port').value;          if (port && port !== '8080') p.push('port=' + port);
   return p.length ? '?' + p.join('&') : '';
