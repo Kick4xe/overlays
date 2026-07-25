@@ -220,7 +220,7 @@
         <code id="url">…</code>
         <div class="btns">
           <button onclick="copyUrl()">Copier l'adresse</button>
-          <button class="ghost" onclick="preview()">Aperçu (démo)</button>
+          <button class="ghost" onclick="preview()">Appliquer à l'aperçu</button>
         </div>
         <p class="hint">
           Dans OBS : source <b>Navigateur</b> → collez cette adresse complète dans le champ URL.
@@ -230,6 +230,9 @@
           autorisez dans l'onglet qui s'ouvre, puis collez l'adresse obtenue dans le champ
           « Jeton » — l'adresse ci-dessus contiendra alors la connexion (à garder privée).
           <br>L'aperçu ci-dessous utilise des fausses pistes : il ne nécessite ni Spotify ni Streamer.bot.
+          Il se recharge tout seul à chaque modification.
+          <br>⚠ <b>Dans OBS, les réglages ne se mettent pas à jour tout seuls</b> : quand vous
+          avez fini, recopiez l'adresse et remplacez celle de votre source.
         </p>
       </div>
       <iframe id="prev"></iframe>
@@ -425,9 +428,18 @@ function copyUrl() {
 
 function preview() { $('prev').src = fullUrl(buildQuery(true)); }
 
+// L'aperçu se recharge tout seul après chaque modification (avec un léger délai pour ne pas
+// recharger à chaque frappe). Sans ça, on croit qu'un réglage « ne fait rien » alors qu'il
+// n'a simplement pas encore été appliqué à l'aperçu.
+let previewTimer = null;
+function schedulePreview() {
+  if (previewTimer) clearTimeout(previewTimer);
+  previewTimer = setTimeout(preview, 450);
+}
+
 ids.forEach(id => {
-  $(id).addEventListener('input', render);
-  $(id).addEventListener('change', render);
+  $(id).addEventListener('input', function () { render(); schedulePreview(); });
+  $(id).addEventListener('change', function () { render(); schedulePreview(); });
 });
 // Changer de mise en page réinitialise la largeur sur le défaut de cette mise en page
 $('layout').addEventListener('change', function () {
