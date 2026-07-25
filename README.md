@@ -9,6 +9,28 @@ plein live. Ici, le principe c'est : ça marche, ou au pire ça affiche moins de
 
 Un seul fichier : `spotify-nowplaying.html`. Rien à installer.
 
+## Par où commencer
+
+Tout se passe ici : **https://github.com/Kick4xe/streamup-now_playing-twitch_widget**
+
+**Le configurateur en ligne** (le plus simple, rien à télécharger pour regarder) :
+https://kick4xe.github.io/streamup-now_playing-twitch_widget/configurateur.html
+
+**L'overlay en ligne** (celui que vous mettrez dans OBS) :
+https://kick4xe.github.io/streamup-now_playing-twitch_widget/spotify-nowplaying.html
+
+Deux façons de l'utiliser :
+
+- **Utiliser ma version hébergée.** Vous ne téléchargez rien. Vous créez votre app Spotify
+  et vous mettez **mon adresse** comme Redirect URI (celle de l'overlay, juste au-dessus).
+  Ça marche : chacun autorise son propre compte, rien ne passe par moi et je ne vois rien de
+  vos données. C'est le chemin le plus court.
+- **Héberger votre propre copie.** Bouton vert **Code** > **Download ZIP** sur le dépôt, puis
+  vous remettez les fichiers sur votre propre GitHub Pages. À préférer si vous voulez rester
+  indépendant de mon dépôt, ou modifier le code.
+
+Dans les deux cas, la suite est la même : suivez la marche à suivre plus bas.
+
 ## Voir à quoi ça ressemble
 
 Ouvrez le fichier dans un navigateur en ajoutant `?test=1` à la fin de l'adresse : de fausses

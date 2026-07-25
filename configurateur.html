@@ -19,7 +19,20 @@
          font-family:'Poppins',sans-serif; }
   h1 { font-size:20px; margin:0 0 4px; }
   p.sub { margin:0 0 22px; opacity:.7; font-size:13px; }
-  .wrap { display:grid; grid-template-columns:1fr 1fr; gap:22px; max-width:960px; }
+  .wrap { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px;
+          max-width:1400px; margin:0 auto; align-items:start; }
+  /* Colonne de droite colante sur grand écran : l'adresse et l'aperçu restent visibles
+     pendant qu'on fait défiler les réglages */
+  @media (min-width: 1100px) and (min-height: 700px) {
+    .wrap > div:last-child { position:sticky; top:20px; }
+  }
+  /* Écran étroit ou format portrait (9:16) : une seule colonne, aperçu en premier */
+  @media (max-width: 980px) {
+    body { padding:16px; }
+    .wrap { grid-template-columns:1fr; gap:16px; }
+    .wrap > div:last-child { order:-1; }
+    h1 { font-size:18px; }
+  }
   fieldset { border:1px solid rgba(251,249,241,.15); border-radius:12px; padding:14px 16px 18px; margin:0 0 16px; }
   legend { font-size:12px; font-weight:700; letter-spacing:1px; opacity:.75; padding:0 6px; }
   label { display:block; font-size:12.5px; margin:12px 0 4px; opacity:.9; }
@@ -39,12 +52,15 @@
   .hint { font-size:11.5px; opacity:.62; margin-top:10px; line-height:1.55; }
   .hint a { color:var(--accent); }
   .hint code { background:rgba(251,249,241,.1); padding:1px 4px; border-radius:4px; }
-  iframe { width:100%; height:520px; border:0; border-radius:12px; background:#0d0d0f; margin-top:14px; }
+  iframe { width:100%; height:clamp(320px, 52vh, 620px); border:0; border-radius:12px;
+           background:#0d0d0f; margin-top:14px; }
+  @media (max-width: 980px) { iframe { height:clamp(280px, 42vh, 460px); } }
 </style>
 </head>
 <body>
   <h1>StreamUp : Now Playing - Twitch Widget</h1>
-  <p class="sub">Réglez l'apparence, copiez l'adresse obtenue, collez-la dans OBS. Aucun code à modifier.</p>
+  <p class="sub">Réglez l'apparence, copiez l'adresse obtenue, collez-la dans OBS. Aucun code à modifier.
+     La marche à suivre complète est dans le README du dépôt.</p>
 
   <div class="wrap">
     <div>
@@ -199,6 +215,7 @@
       <iframe id="prev"></iframe>
       <p class="hint" style="text-align:center; margin-top:14px">
         Un projet <b>StreamUp</b>, par <b>Kickaxe</b> · <a href="https://twitch.tv/kick4xe" target="_blank">twitch.tv/kick4xe</a> · 2026
+        <br><a href="https://github.com/Kick4xe/streamup-now_playing-twitch_widget" target="_blank">Dépôt et mode d'emploi complet</a>
       </p>
     </div>
   </div>
