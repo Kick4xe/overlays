@@ -150,6 +150,32 @@ média de Windows) et lui faire envoyer ce JSON. Je ne l'ai pas fait, donc je ne
 que ça fonctionne. À noter aussi : selon la méthode, la position dans le morceau n'est pas
 toujours disponible, et la barre devient alors inutile.
 
+### Comment s'y prendre, concrètement
+
+Si vous voulez tenter, voilà l'ordre dans lequel je m'y prendrais. La partie compliquée n'est
+pas le widget, c'est de récupérer le morceau en cours.
+
+**1. Trouver ce qui lit votre lecteur.** Deux pistes selon le cas :
+- Le plugin **Tuna** pour OBS sait lire plusieurs sources et écrit le titre dans un fichier.
+- La **session média de Windows** (celle qui fait marcher les touches lecture/pause du clavier)
+  expose le morceau en cours quel que soit le logiciel. Il faut un petit script pour la lire.
+
+**2. Vérifier ce qu'on récupère vraiment.** Avant d'aller plus loin, regardez si vous obtenez
+le titre, l'artiste, la pochette, et surtout la **position dans le morceau**. Les deux premiers
+sont presque toujours là, la pochette souvent, la position rarement. Sans position, mettez
+`?bar=0&times=0` et vous aurez un affichage propre sans barre.
+
+**3. Envoyer le JSON sur le WebSocket de Streamer.bot.** Reprenez l'action décrite dans la
+méthode 2 plus haut, en remplaçant les variables de Tawmae par les vôtres. Le code C# est le
+même, seuls les noms des arguments changent.
+
+**4. Vérifier avec `?debug=1`.** Le panneau vous dira si le message arrive et s'il est compris.
+S'il arrive mais n'est pas reconnu, le message brut s'affiche dessous : comparez-le au format
+ci-dessus, c'est en général une histoire de nom de champ.
+
+À savoir : le mode sans logiciel (méthode 1) est spécifique à Spotify, parce qu'il utilise
+leur API. Pour les autres lecteurs, il faut forcément passer par Streamer.bot ou équivalent.
+
 ## Les vidéos Canvas de Spotify
 
 J'ai essayé, ça ne marche pas et ce n'est pas réparable. Spotify n'a pas d'API officielle pour
@@ -163,9 +189,12 @@ Le code pour les afficher est resté dans le fichier au cas où ça changerait u
 
 ## Crédits
 
-Un projet de Kickaxe · [twitch.tv/kick4xe](https://twitch.tv/kick4xe) · StreamUp · 2026
-Conception et direction de projet : Jérémy (Kickaxe).
+Un projet **StreamUp**, par **Kickaxe** (Jérémy) · [twitch.tv/kick4xe](https://twitch.tv/kick4xe) · 2026
 
-Partagé à titre personnel, pour des proches et pour les participants de StreamUp. Ce n'est pas
-un produit public. Si vous le repartagez, gardez la mention d'origine, c'est tout ce que je
-demande.
+StreamUp, c'est mon activité d'accompagnement technique pour streamers : former plutôt que
+faire à la place, pour que chacun devienne autonome sur sa propre technique. Ce widget est né
+comme ça, en cherchant une solution à un problème que j'avais moi-même en live.
+
+Partagé à titre personnel, pour des proches et pour les personnes accompagnées via StreamUp.
+Ce n'est pas un produit public. Si vous le repartagez, gardez la mention d'origine, c'est tout
+ce que je demande.
