@@ -651,7 +651,10 @@ function applyNowPlaying(d, isNewSong) {
   state.baseProgressMs = num(d.progressMs, 0);
   state.receivedAt     = Date.now();
   state.isPlaying      = toBool(d.isPlaying);
-  state.pausedAt       = state.isPlaying ? 0 : Date.now();
+  // On garde l'HEURE DU DÉBUT de la pause, sans la réinitialiser à chaque relecture.
+  // En mode direct (relecture toutes les ~2 s), l'écraser empêchait le délai de masquage
+  // d'être atteint : la carte ne disparaissait jamais en pause.
+  state.pausedAt       = state.isPlaying ? 0 : (state.pausedAt || Date.now());
 
   if (changed) {
     setTexts(d.trackName, d.artists);
