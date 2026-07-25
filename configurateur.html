@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<!--
+  Now Playing — configurateur
+  Un projet de Kickaxe · twitch.tv/kick4xe · StreamUp · 2026
+  Conception et direction de projet : Jérémy (Kickaxe).
+  Partagé à titre personnel (proches, cursus StreamUp). Merci de conserver cette mention
+  et de citer la source en cas de réutilisation ou de partage.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Now Playing — Configurateur</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --accent:#ec742c; --bg:#1b1b1d; --panel:#26262a; --text:#fbf9f1; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px; background:var(--bg); color:var(--text);
+         font-family:'Poppins',sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sub { margin:0 0 22px; opacity:.7; font-size:13px; }
+  .wrap { display:grid; grid-template-columns:1fr 1fr; gap:22px; max-width:960px; }
+  fieldset { border:1px solid rgba(251,249,241,.15); border-radius:12px; padding:14px 16px 18px; margin:0 0 16px; }
+  legend { font-size:12px; font-weight:700; letter-spacing:1px; opacity:.75; padding:0 6px; }
+  label { display:block; font-size:12.5px; margin:12px 0 4px; opacity:.9; }
+  input, select { width:100%; padding:7px 9px; border-radius:8px; border:1px solid rgba(251,249,241,.2);
+                  background:#141416; color:var(--text); font-family:inherit; font-size:13px; }
+  input[type=color] { padding:2px; height:34px; }
+  .row { display:flex; gap:10px; }
+  .row > * { flex:1; }
+  .out { background:var(--panel); border-radius:12px; padding:16px; }
+  code#url { display:block; word-break:break-all; font-family:ui-monospace,Consolas,monospace;
+             font-size:12px; line-height:1.5; background:#141416; padding:12px; border-radius:8px;
+             border:1px solid rgba(251,249,241,.12); min-height:70px; }
+  .btns { display:flex; gap:10px; margin-top:12px; }
+  button { flex:1; padding:10px; border:0; border-radius:9px; background:var(--accent); color:#fff;
+           font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; }
+  button.ghost { background:rgba(251,249,241,.12); }
+  .hint { font-size:11.5px; opacity:.62; margin-top:10px; line-height:1.55; }
+  .hint a { color:var(--accent); }
+  .hint code { background:rgba(251,249,241,.1); padding:1px 4px; border-radius:4px; }
+  iframe { width:100%; height:520px; border:0; border-radius:12px; background:#0d0d0f; margin-top:14px; }
+</style>
+</head>
+<body>
+  <h1>Now Playing — Configurateur</h1>
+  <p class="sub">Réglez l'apparence, copiez l'adresse obtenue, collez-la dans OBS. Aucun code à modifier.</p>
+
+  <div class="wrap">
+    <div>
+      <fieldset>
+        <legend>FICHIER</legend>
+        <label>Nom du fichier de l'overlay (dans le même dossier)</label>
+        <input id="file" value="spotify-nowplaying.html">
+      </fieldset>
+
+      <fieldset>
+        <legend>FORME</legend>
+        <label>Mise en page</label>
+        <select id="layout">
+          <option value="">Carte verticale (média en haut)</option>
+          <option value="horizontal">Bandeau horizontal</option>
+          <option value="mini">Bandeau minimaliste</option>
+          <option value="text">Texte seul (sans pochette)</option>
+        </select>
+        <div id="coverRow" style="display:none">
+          <label>Taille de la pochette (px)</label>
+          <input id="cover" type="number" value="84" min="40" max="160">
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>FORMAT</legend>
+        <div class="row">
+          <div><label>Largeur (px)</label><input id="w" type="number" value="240" min="140" max="600"></div>
+          <div><label>Zone média</label>
+            <select id="media">
+              <option value="">3:4 (défaut)</option>
+              <option value="square">Carré 1:1</option>
+              <option value="portrait">Portrait 9:16</option>
+            </select>
+          </div>
+        </div>
+        <label>Arrondi des coins (px)</label>
+        <input id="radius" type="number" value="18" min="0" max="40">
+      </fieldset>
+
+      <fieldset>
+        <legend>COULEURS &amp; POLICE</legend>
+        <div class="row">
+          <div><label>Accent (barre)</label><input id="accent" type="color" value="#ec742c"></div>
+          <div><label>Texte</label><input id="text" type="color" value="#fbf9f1"></div>
+        </div>
+        <div class="row">
+          <div><label>Fond de carte</label><input id="panel" type="color" value="#353535"></div>
+          <div><label>Opacité du fond</label><input id="panelalpha" type="number" value="0.92" step="0.02" min="0" max="1"></div>
+        </div>
+        <label>Police (Google Fonts, vide = Poppins)</label>
+        <input id="font" placeholder="Inter, Montserrat…">
+      </fieldset>
+
+      <fieldset>
+        <legend>AFFICHAGE</legend>
+        <label>Alignement des textes</label>
+        <select id="align">
+          <option value="">Gauche (défaut)</option>
+          <option value="center">Centré</option>
+          <option value="right">Droite</option>
+        </select>
+        <div class="row">
+          <div><label>Barre de progression</label>
+            <select id="bar"><option value="">Afficher</option><option value="0">Masquer</option></select>
+          </div>
+          <div><label>Temps chiffrés</label>
+            <select id="times"><option value="">Afficher</option><option value="0">Masquer</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <div><label>Ombre portée</label>
+            <select id="shadow"><option value="">Oui</option><option value="0">Non</option></select>
+          </div>
+          <div><label>Flou du fond (px)</label><input id="blur" type="number" value="22" min="0" max="60"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>LECTEUR</legend>
+        <label>Source de la musique</label>
+        <select id="player">
+          <option value="spotify">Spotify</option>
+          <option value="deezer">Deezer</option>
+          <option value="apple">Apple Music</option>
+          <option value="ytmusic">YouTube Music</option>
+          <option value="autre">Autre / lecteur local</option>
+        </select>
+        <div id="playerInfo" class="hint"></div>
+        <p class="hint" style="border-top:1px solid rgba(251,249,241,.14); margin-top:12px; padding-top:10px">
+          ℹ️ <b>À savoir :</b> cette version passe par <b>Streamer.bot</b>. Beaucoup de streamers
+          utilisent plutôt <b>Mix It Up</b> ou préfèrent ne rien installer du tout — une méthode
+          alternative (le widget parlant directement au service, sans intermédiaire) est
+          envisagée pour une version ultérieure. Elle n'existe pas encore aujourd'hui.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>COMPORTEMENT</legend>
+        <label>Masquer après une pause (ms, 0 = jamais)</label>
+        <input id="hidePaused" type="number" value="3000" step="500" min="0">
+        <label>Décalage de la barre (ms) 
+          <span title="Si la barre est en retard sur la musique, augmentez. Si elle est en avance, mettez une valeur négative.">ⓘ</span>
+        </label>
+        <input id="offset" type="number" value="0" step="250">
+        <div class="row">
+          <div><label>Hôte WebSocket</label><input id="host" value="127.0.0.1"></div>
+          <div><label>Port</label><input id="port" type="number" value="8080"></div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div>
+      <div class="out">
+        <label style="margin-top:0">Adresse à utiliser dans OBS</label>
+        <code id="url">…</code>
+        <div class="btns">
+          <button onclick="copyUrl()">Copier l'adresse</button>
+          <button class="ghost" onclick="preview()">Aperçu (démo)</button>
+        </div>
+        <p class="hint">
+          Dans OBS : source <b>Navigateur</b> → cochez <b>Fichier local</b> → choisissez le fichier,
+          puis <b>collez la partie après le nom du fichier</b> (à partir du « ? ») dans le champ URL,
+          juste après le chemin. Largeur ~<span id="obsw">300</span>, hauteur ~<span id="obsh">520</span>.
+          <br>L'aperçu ci-dessous utilise des fausses pistes : il ne nécessite ni Spotify ni Streamer.bot.
+        </p>
+      </div>
+      <iframe id="prev"></iframe>
+      <p class="hint" style="text-align:center; margin-top:14px">
+        Un projet de <b>Kickaxe</b> · <a href="https://twitch.tv/kick4xe" target="_blank">twitch.tv/kick4xe</a>
+        · <b>StreamUp</b> · 2026
+      </p>
+    </div>
+  </div>
+
+<script>
+"use strict";
+const ids = ['file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','host','port','player'];
+const $ = id => document.getElementById(id);
+const hex = v => (v || '').replace(/^#/, '');
+
+function buildQuery(withTest) {
+  const p = [];
+  if (withTest) p.push('test=1');
+  const layout = $('layout').value; if (layout) p.push('layout=' + layout);
+  const defW = layout === 'mini' ? '300' : (layout === 'horizontal' ? '340' : (layout === 'text' ? '320' : '240'));
+  const w = $('w').value;            if (w && w !== defW) p.push('w=' + w);
+  const cover = $('cover').value;
+  if ((layout === 'horizontal' || layout === 'mini') && cover &&
+      cover !== (layout === 'mini' ? '60' : '84')) p.push('cover=' + cover);
+  const media = $('media').value;    if (media && !layout) p.push('media=' + media);
+  const radius = $('radius').value;  if (radius && radius !== '18') p.push('radius=' + radius);
+  const accent = hex($('accent').value); if (accent.toLowerCase() !== 'ec742c') p.push('accent=' + accent);
+  const text = hex($('text').value);     if (text.toLowerCase() !== 'fbf9f1') p.push('text=' + text);
+  const panel = hex($('panel').value);   if (panel.toLowerCase() !== '353535') p.push('panel=' + panel);
+  const pa = $('panelalpha').value;      if (pa && pa !== '0.92') p.push('panelalpha=' + pa);
+  const font = $('font').value.trim();   if (font) p.push('font=' + encodeURIComponent(font));
+  const hp = $('hidePaused').value;      if (hp !== '3000') p.push('hidePaused=' + hp);
+  const off = $('offset').value;         if (off && off !== '0') p.push('offset=' + off);
+  const align = $('align').value;        if (align) p.push('align=' + align);
+  if ($('bar').value === '0')    p.push('bar=0');
+  if ($('times').value === '0')  p.push('times=0');
+  if ($('shadow').value === '0') p.push('shadow=0');
+  const blur = $('blur').value;          if (blur && blur !== '22') p.push('blur=' + blur);
+  const host = $('host').value.trim();   if (host && host !== '127.0.0.1') p.push('host=' + host);
+  const port = $('port').value;          if (port && port !== '8080') p.push('port=' + port);
+  return p.length ? '?' + p.join('&') : '';
+}
+
+function render() {
+  const layout = $('layout').value;
+  const isBanner = (layout === 'horizontal' || layout === 'mini');
+  // La taille de pochette ne concerne que les bandeaux ; le format média, que la carte verticale
+  $('coverRow').style.display = isBanner ? 'block' : 'none';
+  $('media').disabled = !!layout;
+  $('media').parentElement.style.opacity = layout ? .45 : 1;
+
+  const q = buildQuery(false);
+  $('url').textContent = $('file').value + q;
+
+  // Dimensions conseillées de la source OBS
+  const defW = layout === 'mini' ? 300 : (layout === 'horizontal' ? 340 : (layout === 'text' ? 320 : 240));
+  const w = parseInt($('w').value, 10) || defW;
+  let h;
+  if (isBanner) {
+    const side = parseInt($('cover').value, 10) || (layout === 'mini' ? 60 : 84);
+    h = Math.max(side, layout === 'mini' ? 60 : 84) + 40;
+  } else if (layout === 'text') {
+    h = 130;
+  } else {
+    const m = $('media').value;
+    const ratio = m === 'square' ? 1 : (m === 'portrait' ? 16 / 9 : 4 / 3);
+    h = w * ratio + 88 + 60;
+  }
+  $('obsw').textContent = Math.round(w + 60);
+  $('obsh').textContent = Math.round(h);
+
+  renderPlayerInfo();
+}
+
+// Marche à suivre par lecteur. Règle : on distingue toujours ce qui est VÉRIFIÉ de ce qui ne
+// l'est pas, et on ne prétend jamais que le branchement est automatique.
+const L = {
+  sb:      '<a href="https://streamer.bot" target="_blank">Streamer.bot</a>',
+  tawmae:  '<a href="https://tawmae.xyz/spotify-and-sb" target="_blank">tawmae.xyz — Spotify &amp; SB</a>',
+  spotdev: '<a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a>',
+  tuna:    '<a href="https://obsproject.com/forum/resources/tuna.843/" target="_blank">plugin Tuna (OBS)</a>',
+  obs:     '<a href="https://obsproject.com" target="_blank">OBS</a>'
+};
+
+const PLAYERS = {
+  spotify:
+    '<b style="color:#7CE38B">✔ Méthode vérifiée et fonctionnelle.</b>' +
+    '<ol style="margin:8px 0 0;padding-left:18px;line-height:1.7">' +
+      '<li><b>Spotify Premium requis</b> (obligatoire pour toutes les apps depuis février 2026).</li>' +
+      '<li>Créez une app sur ' + L.spotdev + ' → <i>Create app</i>. Champ <b>Redirect URI</b>, ' +
+        'au caractère près :<br><code style="font-size:11px">http://127.0.0.1:1312/tawmaeSpotify/</code><br>' +
+        'Gardez le <i>Client ID</i> et le <i>Client secret</i>.</li>' +
+      '<li>Installez l\'extension ' + L.tawmae + ' dans ' + L.sb + ' : copiez son <i>import string</i>, ' +
+        'bouton <b>Import</b> dans Streamer.bot, puis activez les commandes.</li>' +
+      '<li>Ouvrez l\'action <code>[SPOTIFY &amp; SB] [#] 0 - Settings</code> → <i>Test Trigger</i>, ' +
+        'collez Client ID + secret, cliquez <b>Connect</b> (l\'indicateur passe au vert).</li>' +
+      '<li>Streamer.bot → <i>Servers/Clients</i> → <b>WebSocket Server</b> : <i>Auto Start</i> coché, ' +
+        '127.0.0.1 / 8080, sans « Enforce All Requests ».</li>' +
+      '<li>Créez l\'action « pont » : 3 déclencheurs (<i>New Song</i>, <i>Song Paused</i>, ' +
+        '<i>Song Continued</i>) + <b>une seule</b> sous-action <b>Core → Execute C# Code</b> ' +
+        '(code complet dans le README). ⚠ La sous-action « Custom Event Trigger » ne fonctionne ' +
+        '<b>pas</b> : elle ne diffuse rien sur le WebSocket.</li>' +
+      '<li>Dans ' + L.obs + ', ajoutez une source <b>Navigateur</b> → <i>Fichier local</i> → le ' +
+        'fichier de l\'overlay, puis collez la partie « ? » générée ci-contre.</li>' +
+    '</ol>' +
+    '<p style="margin:8px 0 0">En cas de souci : ouvrez l\'overlay avec <code>?debug=1</code> ' +
+    '— il affiche l\'état de la connexion et les messages reçus (voir le tableau de dépannage ' +
+    'du README).</p>',
+
+  deezer:
+    '<b style="color:#FFC35C">⚠ Méthode non vérifiée — à construire.</b>' +
+    '<p style="margin:8px 0 0">Aucune intégration Streamer.bot officielle connue pour Deezer. ' +
+    'Deux pistes, aucune testée à ce jour :</p>' +
+    '<ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">' +
+      '<li>La <b>session média de Windows</b> (le hub qui alimente vos touches lecture/pause) : ' +
+        'capte la plupart des lecteurs, mais demande un petit service local.</li>' +
+      '<li>Le ' + L.tuna + ', qui écrit le morceau en cours et sait lire plusieurs sources.</li>' +
+    '</ul>' +
+    '<p style="margin:8px 0 0">Dans les deux cas, il faut ensuite envoyer le <b>contrat JSON</b> ' +
+    '(voir README) sur le WebSocket de ' + L.sb + '. ⚠ La barre de progression n\'est pas ' +
+    'toujours disponible selon la méthode retenue.</p>' +
+    '<p style="margin:8px 0 0"><a href="https://www.deezer.com" target="_blank">deezer.com</a></p>',
+
+  apple:
+    '<b style="color:#FFC35C">⚠ Méthode non vérifiée — à construire.</b>' +
+    '<p style="margin:8px 0 0">Même approche que Deezer : session média Windows ou ' + L.tuna + '. ' +
+    'Sur macOS, des outils lisent directement l\'application Musique. Puis envoi du contrat ' +
+    'JSON sur le WebSocket de ' + L.sb + '.</p>' +
+    '<p style="margin:8px 0 0"><a href="https://music.apple.com" target="_blank">music.apple.com</a></p>',
+
+  ytmusic:
+    '<b style="color:#FFC35C">⚠ Méthode non vérifiée — à construire.</b>' +
+    '<p style="margin:8px 0 0">La lecture se faisant dans un navigateur, il faut soit une ' +
+    'extension dédiée, soit la session média du système, pour récupérer le titre en cours. ' +
+    'Puis envoi du contrat JSON sur le WebSocket de ' + L.sb + '.</p>' +
+    '<p style="margin:8px 0 0"><a href="https://music.youtube.com" target="_blank">music.youtube.com</a></p>',
+
+  autre:
+    '<b>Le widget est source-agnostique.</b>' +
+    '<p style="margin:8px 0 0">Toute source capable d\'envoyer le contrat JSON du README sur le ' +
+    'WebSocket de ' + L.sb + ' fonctionne, quel que soit le lecteur : il suffit de fournir titre, ' +
+    'artiste, pochette, position et durée. Le widget se charge du reste (progression fluide, ' +
+    'transitions, masquage en pause).</p>'
+};
+function renderPlayerInfo() {
+  $('playerInfo').innerHTML = PLAYERS[$('player').value] || '';
+}
+
+function copyUrl() {
+  navigator.clipboard.writeText($('url').textContent)
+    .then(() => { const b = document.querySelector('button'); const t = b.textContent;
+                  b.textContent = 'Copié ✓'; setTimeout(() => b.textContent = t, 1400); })
+    .catch(() => alert('Copie impossible — sélectionnez le texte à la main.'));
+}
+
+function preview() { $('prev').src = $('file').value + buildQuery(true); }
+
+ids.forEach(id => {
+  $(id).addEventListener('input', render);
+  $(id).addEventListener('change', render);
+});
+// Changer de mise en page réinitialise la largeur sur le défaut de cette mise en page
+$('layout').addEventListener('change', function () {
+  const l = $('layout').value;
+  $('w').value = l === 'mini' ? 300 : (l === 'horizontal' ? 340 : (l === 'text' ? 320 : 240));
+  $('cover').value = l === 'mini' ? 60 : 84;
+  render(); preview();
+});
+render();
+preview();
+</script>
+</body>
+</html>

@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<!--
+  Now Playing — overlay musique pour OBS
+  Un projet de Kickaxe · twitch.tv/kick4xe · StreamUp · 2026
+  Conception et direction de projet : Jérémy (Kickaxe).
+  Partagé à titre personnel (proches, cursus StreamUp). Merci de conserver cette mention
+  et de citer la source en cas de réutilisation ou de partage.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Now Playing — Overlay multi-lecteurs (Streamer.bot)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ===== Charte (DA Kickaxe) ===== */
+  :root {
+    --orange: #ec742c;
+    --cream:  #fbf9f1;
+    --dark:   #353535;
+    --blue:   #00B4FF;
+    --font:   'Poppins', sans-serif;
+
+    --panel-bg: rgba(53, 53, 53, 0.92);
+    --track-bg: rgba(251, 249, 241, 0.18);
+    --radius:   18px;
+    --card-w:   240px;   /* largeur de la carte — ajustable via ?w=280 */
+    --media-ratio: 3 / 4; /* zone média. 3:4 par défaut = compromis hauteur/présence.
+                             ?media=portrait → 9:16 (format natif des Canvas Spotify)
+                             ?media=square   → 1:1 (pochette plein cadre) */
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent; /* indispensable pour OBS */
+    font-family: var(--font);
+    overflow: hidden;
+  }
+
+  #stage {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ===== Carte « Gallery / stacked » ===== */
+  #card {
+    width: var(--card-w);
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+
+    /* cachée par défaut : n'apparaît qu'avec des données */
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    pointer-events: none;
+  }
+  #card.visible { opacity: 1; transform: translateY(0) scale(1); }
+
+  /* --- Zone média (portrait 9:16, comme le mode Gallery d'Amuse / les Canvas Spotify).
+     V1 : fond = pochette floutée/assombrie plein cadre + pochette nette centrée.
+     V2 : le canvas vidéo remplacera le fond flouté, la pochette restant le repli. --- */
+  #media {
+    position: relative;
+    width: 100%;
+    aspect-ratio: var(--media-ratio);
+    background: var(--dark);
+    overflow: hidden;
+  }
+  #media .bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.18);
+    filter: blur(var(--bg-blur, 22px)) saturate(1.15) brightness(0.62);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  #media .bg.show { opacity: 1; }
+  #media .cover {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 84%;
+    aspect-ratio: 1 / 1;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.5s ease, filter 0.4s ease;
+  }
+  #media .cover.show { opacity: 1; }
+  /* En mode carré (?media=square), la pochette occupe tout le cadre */
+  body.media-square #media .cover {
+    width: 100%;
+    height: 100%;
+    left: 0; top: 0;
+    transform: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  body.media-square #media .bg { display: none; }
+
+  /* ===== VARIANTES DE MISE EN PAGE (?layout=) =====
+     - défaut  : carte verticale « Gallery/stacked » (média en haut, textes dessous)
+     - horizontal : bandeau — pochette carrée à gauche, textes à droite
+     - mini       : bandeau encore plus discret (une ligne de titre, pas de temps chiffré) */
+  body.layout-horizontal #card,
+  body.layout-mini #card {
+    display: flex;
+    align-items: stretch;
+  }
+  body.layout-horizontal #media,
+  body.layout-mini #media {
+    flex: 0 0 auto;
+    width: var(--media-side, 84px);
+    aspect-ratio: 1 / 1;
+  }
+  body.layout-horizontal #media .cover,
+  body.layout-mini #media .cover {
+    width: 100%;
+    height: 100%;
+    left: 0; top: 0;
+    transform: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  body.layout-horizontal #media .bg,
+  body.layout-mini #media .bg { display: none; }
+  body.layout-horizontal #info,
+  body.layout-mini #info {
+    flex: 1 1 auto;
+    min-width: 0;              /* indispensable : autorise l'ellipse dans un flex */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 9px 12px;
+  }
+  body.layout-horizontal #trackName,
+  body.layout-mini #trackName {
+    -webkit-line-clamp: 1;
+    min-height: 0;
+  }
+  body.layout-horizontal #progressWrap { margin-top: 8px; }
+
+  /* Mini : le strict nécessaire */
+  body.layout-mini #media { width: var(--media-side, 60px); }
+  body.layout-mini #times { display: none; }
+  body.layout-mini #progressWrap { margin-top: 7px; }
+  body.layout-mini #track { height: 4px; }
+  body.layout-mini #artists { font-size: 11.5px; }
+  body.layout-mini #pauseBadge { top: 6px; right: 6px; padding: 2px 7px; font-size: 10px; }
+
+  /* ===== Options d'affichage (?bar=0, ?times=0, ?align=, ?shadow=0) ===== */
+  body.no-bar #track { display: none; }
+  body.no-bar #times { margin-top: 0; }
+  body.no-progress #progressWrap { display: none; }
+  body.no-times #times { display: none; }
+  body.align-center #info { text-align: center; }
+  body.align-center #times { justify-content: space-between; }
+  body.align-right #info { text-align: right; }
+  body.no-shadow #card { box-shadow: none; }
+
+  /* --- Variante TEXTE SEUL (?layout=text) : ni pochette ni visuel, juste le titre,
+     l'artiste et une barre fine. Pour les overlays très sobres. --- */
+  body.layout-text #media { display: none; }
+  body.layout-text #card { display: block; }
+  body.layout-text #info { padding: 12px 15px; }
+  body.layout-text #trackName { -webkit-line-clamp: 1; min-height: 0; font-size: 16px; }
+  body.layout-text #artists { font-size: 13px; }
+  body.layout-text #progressWrap { margin-top: 9px; }
+  /* En texte seul, l'état pause se lit sur l'opacité (pas de badge sur une pochette absente) */
+  body.layout-text #card.paused #info { opacity: 0.72; transition: opacity 0.3s ease; }
+
+  /* --- Canvas vidéo (V2) : remplit le cadre média, au-dessus du fond flouté, sous le badge.
+     Affiché seulement si un canvasUrl .mp4 est reçu/récupéré ; sinon on garde pochette + fond. --- */
+  #media .canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    z-index: 1;
+  }
+  #media .canvas.show { opacity: 1; }
+  /* Quand le canvas joue, il EST le visuel : on masque la pochette nette et le fond flouté. */
+  #card.canvas-active #media .cover,
+  #card.canvas-active #media .bg { opacity: 0; }
+  #card.canvas-active #media .canvas { z-index: 2; }
+
+  /* Badge pause (discret, en haut à droite du média) */
+  #pauseBadge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 3;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--cream);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  #card.paused #pauseBadge { opacity: 1; }
+  #card.paused #media .cover.show { filter: saturate(0.55) brightness(0.85); }
+
+  /* --- Bloc texte --- */
+  #info { padding: 11px 13px 13px; }
+
+  #trackName {
+    color: var(--cream);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    /* 2 lignes max, puis ellipse */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 1.25em;
+  }
+
+  #artists {
+    color: var(--cream);
+    opacity: 0.8;
+    font-size: 12.5px;
+    font-weight: 500;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Petite animation d'entrée des textes au changement de morceau */
+  .swap-in { animation: swapIn 0.45s ease both; }
+  @keyframes swapIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* --- Progression --- */
+  #progressWrap { margin-top: 10px; }
+
+  #track {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    background: var(--track-bg);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  #fill {
+    position: absolute;
+    left: 0; top: 0;
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: var(--orange);
+    /* pas de transition CSS : la largeur est pilotée par requestAnimationFrame
+       (une transition lisserait par à-coups et fausserait la resynchronisation) */
+  }
+  #card.paused #fill { background: rgba(236, 116, 44, 0.55); }
+
+  #times {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    color: var(--cream);
+    opacity: 0.75;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Debug (?debug=1) ===== */
+  #dbg {
+    position: fixed;
+    left: 10px;
+    top: 10px;
+    max-width: 46%;
+    max-height: 92%;
+    overflow: auto;
+    margin: 0;
+    padding: 10px 12px;
+    background: rgba(0, 0, 0, 0.82);
+    color: #b6f5c0;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    border-radius: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: none;
+    z-index: 9999;
+  }
+  body.debug #dbg { display: block; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="card">
+      <div id="media">
+        <img class="bg" id="bgA" alt="">
+        <img class="bg" id="bgB" alt="">
+        <img class="cover" id="coverA" alt="">
+        <img class="cover" id="coverB" alt="">
+        <video class="canvas" id="canvasVid" muted loop playsinline preload="auto"></video>
+        <div id="pauseBadge">EN PAUSE</div>
+      </div>
+      <div id="info">
+        <div id="trackName"></div>
+        <div id="artists"></div>
+        <div id="progressWrap">
+          <div id="track"><div id="fill"></div></div>
+          <div id="times"><span id="tCur">0:00</span><span id="tTot">0:00</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <pre id="dbg"></pre>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   Spotify « Now Playing » — V1 pochette (widget maison, suite Kickaxe)
+
+   SOURCE DES DONNÉES : Streamer.bot (WebSocket local). Aujourd'hui alimenté par
+   l'extension « Spotify & SB » (Tawmae) via une action qui BROADCAST le JSON ci-dessous,
+   mais le widget est SOURCE-AGNOSTIQUE : n'importe quelle source remplissant ce contrat
+   fonctionne (autre lecteur, plugin Tuna, session média Windows…). Contrat :
+
+     {
+       "widget":  "kickaxe-music",             // "kickaxe-music" (ou "kickaxe-spotify" — hérité)
+       "kind":    "nowplaying",                // "nowplaying" | "paused" | "resumed"
+       "source":        "spotify",             // optionnel : spotify | apple | ytmusic | deezer…
+       "trackId":       "%trackId%",
+       "trackName":     "%trackName%",
+       "artists":       "%artists%",
+       "coverImageURL": "%coverImageURL%",
+       "canvasUrl":     "",                    // optionnel (V2) : .mp4 du Canvas ; sinon le widget
+                                               // peut l'obtenir seul via ?canvasApi=<micro-service>
+       "isPlaying":     %isPlaying%,
+       "progressMs":    %progressMs%,
+       "durationMs":    %durationMs%
+     }
+
+   Le widget interpole la progression localement entre deux événements
+   (base = progressMs + horodatage de réception). Pas de canvas en V1 :
+   la pochette occupe la zone média ; la V2 posera la vidéo par-dessus.
+
+   NOTE (à valider au premier branchement réel, avec ?debug=1) : l'enveloppe
+   exacte des broadcasts custom de Streamer.bot (event.source / event.type)
+   n'est pas supposée ici — le widget accepte TOUT message dont le data porte
+   widget === "kickaxe-spotify". Même philosophie défensive que le Poll Overlay.
+   ========================================================================= */
+
+/* ----- Réglages (modifiables) ----- */
+const CONFIG = {
+  host: '127.0.0.1',        // serveur WebSocket Streamer.bot
+  port: 8080,
+  endpoint: '/',
+  reconnectMs: 2500,        // reconnexion si la connexion tombe
+  hideWhenSilentMs: 15000,  // sans AUCUNE donnée depuis ce délai -> carte masquée
+  hideWhenPausedMs: 3000,   // masque la carte après X ms de pause (0 = rester affichée).
+                            // Surchargeable : ?hidePaused=0 (jamais) ou ?hidePaused=10000
+  offsetMs: 0,              // ?offset=  : compense le décalage constant de la barre.
+                            // Positif = la barre avance plus tôt (rattrape un retard).
+  debug: false,             // ?debug=1
+  test: false,              // ?test=1 : démo sans Streamer.bot
+  canvasApi: '',            // V2 canvas : URL du micro-service (?canvasApi=...), vide = désactivé
+  clientId: '',             // MODE DIRECT (?clientId=) : dialogue avec Spotify sans intermédiaire
+  pollMs: 2000              // MODE DIRECT : fréquence d'interrogation (?poll=, 1000 minimum)
+};
+
+(function applyUrlOverrides() {
+  const q = new URLSearchParams(location.search);
+  if (q.has('debug')) CONFIG.debug = (q.get('debug') === '1' || q.get('debug') === 'true');
+  if (q.has('test'))  CONFIG.test  = (q.get('test') === '1' || q.get('test') === 'true');
+  if (q.has('host'))  CONFIG.host  = q.get('host');
+  if (q.has('port'))  CONFIG.port  = parseInt(q.get('port'), 10) || CONFIG.port;
+  if (q.has('hidePaused')) CONFIG.hideWhenPausedMs = num(q.get('hidePaused'), 0);
+  if (q.has('w')) document.documentElement.style.setProperty('--card-w', num(q.get('w'), 240) + 'px');
+  if (q.get('media') === 'square') {
+    document.documentElement.style.setProperty('--media-ratio', '1 / 1');
+    document.body.classList.add('media-square');
+  } else if (q.get('media') === 'portrait') {
+    document.documentElement.style.setProperty('--media-ratio', '9 / 16');
+  }
+  const layout = q.get('layout');
+  if (layout === 'horizontal' || layout === 'mini') {
+    document.body.classList.add('layout-' + layout);
+    // En bandeau, la largeur par défaut de la carte verticale serait trop étroite
+    if (!q.has('w')) document.documentElement.style.setProperty('--card-w', layout === 'mini' ? '300px' : '340px');
+    if (q.has('cover')) document.documentElement.style.setProperty('--media-side', num(q.get('cover'), 84) + 'px');
+  } else if (layout === 'text') {
+    document.body.classList.add('layout-text');
+    if (!q.has('w')) document.documentElement.style.setProperty('--card-w', '320px');
+  }
+  if (q.has('canvasApi')) CONFIG.canvasApi = q.get('canvasApi');
+  if (q.has('clientId')) CONFIG.clientId = q.get('clientId').trim();
+  if (q.has('poll')) CONFIG.pollMs = Math.max(1000, num(q.get('poll'), 2000));
+  if (q.has('offset')) CONFIG.offsetMs = num(q.get('offset'), 0);
+  if (q.get('bar') === '0') document.body.classList.add('no-bar');
+  if (q.get('times') === '0') document.body.classList.add('no-times');
+  if (q.get('bar') === '0' && q.get('times') === '0') document.body.classList.add('no-progress');
+  if (q.get('align') === 'center') document.body.classList.add('align-center');
+  if (q.get('align') === 'right') document.body.classList.add('align-right');
+  if (q.get('shadow') === '0') document.body.classList.add('no-shadow');
+  if (q.has('blur')) document.documentElement.style.setProperty('--bg-blur', num(q.get('blur'), 22) + 'px');
+  if (q.has('canvasTest')) CONFIG.canvasTest = q.get('canvasTest'); // force ce .mp4 comme canvas
+                                                                   // sur tous les morceaux (validation
+                                                                   // du rendu sans micro-service)
+
+  // --- DA adaptable (distribution à d'autres streamers) : surcharges par URL ---
+  const root = document.documentElement.style;
+  if (q.has('accent')) root.setProperty('--orange', '#' + q.get('accent').replace(/^#/, ''));
+  if (q.has('text'))   root.setProperty('--cream',  '#' + q.get('text').replace(/^#/, ''));
+  if (q.has('radius')) root.setProperty('--radius', num(q.get('radius'), 18) + 'px');
+  if (q.has('panel')) {
+    const hex = q.get('panel').replace(/^#/, '');
+    const a = q.has('panelalpha') ? q.get('panelalpha') : '0.92';
+    const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
+    if (!isNaN(r + g + b)) root.setProperty('--panel-bg', 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
+  }
+  if (q.has('font')) {
+    const f = q.get('font');
+    root.setProperty('--font', "'" + f + "', sans-serif");
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=' +
+      encodeURIComponent(f).replace(/%20/g, '+') + ':wght@400;500;600;700;800&display=swap';
+    document.head.appendChild(link);
+  }
+})();
+if (CONFIG.debug) document.body.classList.add('debug');
+
+/* ----- DOM ----- */
+const $card   = document.getElementById('card');
+const $bgA    = document.getElementById('bgA');
+const $bgB    = document.getElementById('bgB');
+const $coverA = document.getElementById('coverA');
+const $coverB = document.getElementById('coverB');
+const $canvasVid = document.getElementById('canvasVid');
+const $name   = document.getElementById('trackName');
+const $art    = document.getElementById('artists');
+const $fill   = document.getElementById('fill');
+const $tCur   = document.getElementById('tCur');
+const $tTot   = document.getElementById('tTot');
+const $dbg    = document.getElementById('dbg');
+
+/* ----- État ----- */
+const state = {
+  trackId: null,
+  durationMs: 0,
+  baseProgressMs: 0,   // progression au moment de la réception
+  receivedAt: 0,       // Date.now() à la réception (base d'interpolation)
+  isPlaying: false,
+  lastDataAt: 0,       // dernier message reçu (pour le masquage « silence »)
+  pausedAt: 0,
+  activeCover: 0       // 0 = A visible, 1 = B visible (crossfade)
+};
+
+/* ----- Utilitaires ----- */
+function num(v, d) {
+  const n = (typeof v === 'number') ? v : parseInt(v, 10);
+  return isNaN(n) ? (d || 0) : n;
+}
+function fmt(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m + ':' + (r < 10 ? '0' : '') + r;
+}
+function toBool(v) {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') return v.toLowerCase() === 'true';
+  return !!v;
+}
+
+/* ----- Rendu ----- */
+function showCard() { $card.classList.add('visible'); }
+function hideCard() { $card.classList.remove('visible'); }
+
+function setCover(url) {
+  if (!url) return;
+  const showB = (state.activeCover === 0);
+  const pairs = [
+    { incoming: showB ? $coverB : $coverA, outgoing: showB ? $coverA : $coverB },
+    { incoming: showB ? $bgB    : $bgA,    outgoing: showB ? $bgA    : $bgB }
+  ];
+  const img = new Image();
+  img.onload = function () {
+    pairs.forEach(function (p) {
+      p.incoming.src = url;
+      p.incoming.classList.add('show');
+      p.outgoing.classList.remove('show');
+    });
+    state.activeCover = showB ? 1 : 0;
+  };
+  img.onerror = function () { /* on garde la pochette précédente */ };
+  img.src = url;
+}
+
+/* ----- Canvas vidéo (V2) ----- */
+// Affiche/retire la vidéo. Repli propre : toute URL non-.mp4 ou vide → retour pochette.
+function setCanvas(url) {
+  const ok = (typeof url === 'string') && /\.mp4(\?|$)/i.test(url);
+  if (ok) {
+    if ($canvasVid.getAttribute('src') !== url) {
+      $canvasVid.setAttribute('src', url);
+      try { $canvasVid.load(); } catch (e) { /* noop */ }
+    }
+    const p = $canvasVid.play();
+    if (p && p.catch) p.catch(function () { /* autoplay muet : toléré en OBS */ });
+    $canvasVid.classList.add('show');
+    $card.classList.add('canvas-active');
+  } else {
+    $canvasVid.classList.remove('show');
+    $card.classList.remove('canvas-active');
+    try { $canvasVid.pause(); $canvasVid.removeAttribute('src'); $canvasVid.load(); } catch (e) { /* noop */ }
+  }
+}
+
+// Extraction tolérante : le format de réponse des micro-services canvas varie (canvasUrl direct,
+// data.canvasesList[0].canvasUrl, etc.). On teste les emplacements connus et on filtre les .mp4.
+function extractCanvasUrl(j) {
+  if (!j) return '';
+  const c = [
+    j.canvasUrl, j.canvasURL, j.url,
+    j.data && j.data.canvasUrl,
+    j.canvasesList && j.canvasesList[0] && j.canvasesList[0].canvasUrl,
+    j.data && j.data.canvasesList && j.data.canvasesList[0] && j.data.canvasesList[0].canvasUrl
+  ];
+  for (let i = 0; i < c.length; i++) {
+    if (typeof c[i] === 'string' && /\.mp4(\?|$)/i.test(c[i])) return c[i];
+  }
+  return '';
+}
+
+// Récupère le canvas depuis le micro-service (si ?canvasApi=). Échec = repli pochette, jamais
+// de panne visible. Anti-course : on ignore une réponse si le morceau a déjà changé.
+function fetchCanvas(trackId) {
+  if (CONFIG.canvasTest) { setCanvas(CONFIG.canvasTest); return; } // mode validation visuelle
+  if (!CONFIG.canvasApi || !trackId) { setCanvas(''); return; }
+  const base = CONFIG.canvasApi;
+  const url = base.indexOf('%id%') >= 0
+    ? base.replace('%id%', encodeURIComponent(trackId))
+    : base + encodeURIComponent(trackId);
+  const asked = trackId;
+  fetch(url)
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (asked !== state.trackId) return;      // morceau changé entre-temps
+      setCanvas(extractCanvasUrl(j));
+    })
+    .catch(function () { setCanvas(''); });     // réseau/CORS KO → pochette
+}
+
+function setTexts(name, artists) {
+  [$name, $art].forEach(function (el) {
+    el.classList.remove('swap-in');
+    void el.offsetWidth; // relance l'animation
+    el.classList.add('swap-in');
+  });
+  $name.textContent = name || '';
+  $art.textContent  = artists || '';
+}
+
+/* ----- Réception d'un état « now playing » ----- */
+function applyNowPlaying(d, isNewSong) {
+  state.lastDataAt = Date.now();
+
+  const trackId = d.trackId || null;
+  const changed = isNewSong || (trackId && trackId !== state.trackId);
+
+  state.trackId        = trackId || state.trackId;
+  state.durationMs     = num(d.durationMs, state.durationMs);
+  state.baseProgressMs = num(d.progressMs, 0);
+  state.receivedAt     = Date.now();
+  state.isPlaying      = toBool(d.isPlaying);
+  state.pausedAt       = state.isPlaying ? 0 : Date.now();
+
+  if (changed) {
+    setTexts(d.trackName, d.artists);
+    setCover(d.coverImageURL);
+    // V2 canvas : si la source fournit déjà l'URL, on l'utilise ; sinon le widget la récupère
+    // lui-même via le micro-service (?canvasApi=). Dans tous les cas, repli pochette si absent.
+    if (CONFIG.canvasTest) setCanvas(CONFIG.canvasTest);
+    else if (d.canvasUrl || d.canvasURL) setCanvas(d.canvasUrl || d.canvasURL);
+    else fetchCanvas(state.trackId);
+  } else {
+    // resynchronisation silencieuse (pause/reprise) : textes/pochette inchangés
+    if (d.trackName && $name.textContent !== d.trackName) $name.textContent = d.trackName;
+  }
+
+  // Le canvas suit l'état de lecture (la vidéo se met en pause avec la musique)
+  if ($canvasVid.classList.contains('show')) {
+    if (state.isPlaying) { const pp = $canvasVid.play(); if (pp && pp.catch) pp.catch(function () {}); }
+    else $canvasVid.pause();
+  }
+
+  $card.classList.toggle('paused', !state.isPlaying);
+  $tTot.textContent = fmt(state.durationMs);
+  showCard();
+}
+
+function handlePayload(d) {
+  if (!d || typeof d !== 'object') return false;
+
+  // Deux formats acceptés :
+  //  1) contrat explicite : { widget:"kickaxe-spotify", ... }  (si un jour on envoie du JSON)
+  //  2) « Custom Event Trigger » + « Use Args » : les arguments de l'action arrivent à plat
+  //     (trackName / artists / coverImageURL / progressMs / durationMs…) parmi d'autres clés.
+  const isContract = (d.widget === 'kickaxe-spotify' || d.widget === 'kickaxe-music');
+  const looksLikeTrack = (d.trackName !== undefined && d.durationMs !== undefined);
+  if (!isContract && !looksLikeTrack) return false;
+
+  if (CONFIG.debug) showDebugRaw(d);
+
+  switch (d.kind) {
+    case 'nowplaying': applyNowPlaying(d, true);  break;
+    case 'paused':     applyNowPlaying(d, false); break;
+    case 'resumed':    applyNowPlaying(d, false); break;
+    // Sans 'kind' (cas « Use Args ») : le changement de morceau est détecté via trackId.
+    default:           applyNowPlaying(d, false); break;
+  }
+  return true;
+}
+
+/* ----- Boucle d'interpolation (progression fluide) ----- */
+function tick() {
+  const now = Date.now();
+
+  // Masquage « silence » : jamais de coquille vide à l'écran
+  if (state.lastDataAt && (now - state.lastDataAt) > CONFIG.hideWhenSilentMs && !state.isPlaying) {
+    // silence prolongé ET pas en lecture -> on masque
+    hideCard();
+  }
+
+  // Masquage optionnel après X ms de pause
+  if (CONFIG.hideWhenPausedMs > 0 && state.pausedAt &&
+      (now - state.pausedAt) > CONFIG.hideWhenPausedMs) {
+    hideCard();
+  }
+
+  if (state.durationMs > 0) {
+    let prog = state.baseProgressMs;
+    if (state.isPlaying) prog += (now - state.receivedAt) + CONFIG.offsetMs;
+    prog = Math.max(0, Math.min(prog, state.durationMs)); // figé à 100 % en attendant la resync
+
+    $fill.style.width = ((prog / state.durationMs) * 100).toFixed(2) + '%';
+    $tCur.textContent = fmt(prog);
+  }
+
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ----- Debug ----- */
+const diag = { ws: 'jamais connecté', msgTotal: 0, msgReco: 0, lastTypes: [], lastRaw: null };
+
+function renderDiag() {
+  if (!CONFIG.debug) return;
+  const head =
+    'WebSocket : ' + diag.ws + '\n' +
+    'URL       : ws://' + CONFIG.host + ':' + CONFIG.port + CONFIG.endpoint + '\n' +
+    'Messages reçus : ' + diag.msgTotal + '   |   reconnus : ' + diag.msgReco + '\n' +
+    'Derniers événements : ' + (diag.lastTypes.length ? diag.lastTypes.join(', ') : '(aucun)') +
+    '\n----------------------------------------\n';
+  let body;
+  try { body = diag.lastRaw ? JSON.stringify(diag.lastRaw, null, 2) : '(aucun message reçu pour l\'instant)'; }
+  catch (e) { body = '(message non sérialisable)'; }
+  $dbg.textContent = head + body;
+}
+
+function showDebugRaw(d) {
+  diag.lastRaw = d;
+  renderDiag();
+  // eslint-disable-next-line no-console
+  console.log('[spotify-nowplaying]', d);
+}
+
+/* ----- Connexion WebSocket Streamer.bot ----- */
+let ws = null;
+
+function connect() {
+  const url = 'ws://' + CONFIG.host + ':' + CONFIG.port + CONFIG.endpoint;
+  try { ws = new WebSocket(url); }
+  catch (e) { setTimeout(connect, CONFIG.reconnectMs); return; }
+
+  ws.onopen = function () {
+    diag.ws = 'CONNECTÉ ✅';
+    renderDiag();
+    if (CONFIG.debug) console.log('[spotify-nowplaying] connecté à', url);
+    // Abonnement large : les broadcasts custom arrivent selon l'enveloppe SB ;
+    // le filtrage réel se fait sur data.widget === 'kickaxe-spotify'.
+    ws.send(JSON.stringify({
+      request: 'Subscribe',
+      id: 'kickaxe-spotify-nowplaying',
+      events: { General: ['Custom'] }
+    }));
+  };
+
+  ws.onmessage = function (msg) {
+    let payload;
+    try { payload = JSON.parse(msg.data); }
+    catch (e) { return; }
+    if (!payload) return;
+
+    // Journal de diagnostic (visible avec ?debug=1)
+    if (payload.event || payload.data) {
+      diag.msgTotal++;
+      const label = payload.event
+        ? ((payload.event.source || '?') + '/' + (payload.event.type || '?'))
+        : 'sans event';
+      diag.lastTypes.push(label);
+      if (diag.lastTypes.length > 6) diag.lastTypes.shift();
+      diag.lastRaw = payload;   // message BRUT complet, avec son enveloppe
+      renderDiag();
+    }
+
+    // Lecture défensive : selon l'enveloppe de Streamer.bot, les données utiles peuvent se
+    // trouver à différents niveaux. On teste les emplacements plausibles, du plus probable
+    // au plus général (avec « Custom Event Trigger + Use Args » : payload.data ou .data.args).
+    const candidates = [
+      payload.data,
+      payload.data && payload.data.args,
+      payload.data && payload.data.arguments,
+      payload.data && payload.data.data,
+      payload.args,
+      payload
+    ];
+    for (let i = 0; i < candidates.length; i++) {
+      if (handlePayload(candidates[i])) { diag.msgReco++; renderDiag(); return; }
+    }
+  };
+
+  ws.onclose = function () {
+    diag.ws = 'DÉCONNECTÉ ❌ (nouvelle tentative…)';
+    renderDiag();
+    setTimeout(connect, CONFIG.reconnectMs);
+  };
+  ws.onerror = function () { try { ws.close(); } catch (e) { /* noop */ } };
+}
+
+/* ----- Mode test (?test=1) : démo sans Streamer.bot, ressources locales ----- */
+function makeDemoCover(bg, glyph) {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">' +
+    '<rect width="300" height="300" fill="' + bg + '"/>' +
+    glyph + '</svg>';
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+function showTestBadge() {
+  if (document.getElementById('test-badge')) return;
+  const b = document.createElement('div');
+  b.id = 'test-badge';
+  b.textContent = 'MODE TEST';
+  b.style.cssText = 'position:fixed;right:12px;top:12px;z-index:9999;' +
+    'background:rgba(236,116,44,0.92);color:#fff;font-family:var(--font);' +
+    'font-weight:700;font-size:13px;letter-spacing:1px;padding:6px 12px;' +
+    'border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,0.3);';
+  document.body.appendChild(b);
+}
+
+function runTest() {
+  showTestBadge();
+
+  const tracks = [
+    { trackId: 'demo1', trackName: 'Néon sur la Meuse', artists: 'LunaStream',
+      durationMs: 24000,
+      coverImageURL: makeDemoCover('#0EA5E9',
+        '<path fill="#fbf9f1" d="M195 60a95 95 0 1 0 60 150 80 80 0 0 1-60-150z"/>') },
+    { trackId: 'demo2', trackName: 'Pixels & Confettis (feat. RosePixel) — version longue pour tester l\'ellipse sur deux lignes', artists: 'RosePixel, VoltGamer',
+      durationMs: 18000,
+      coverImageURL: makeDemoCover('#EC4899',
+        '<path fill="#fbf9f1" d="M150 245s-84-53-118-97C9 117 20 69 60 54c26-10 55-2 73 20l17 21 17-21c18-22 47-30 73-20 40 15 51 63 28 94-34 44-118 97-118 97z"/>') },
+    { trackId: 'demo3', trackName: 'Signal Nocturne', artists: 'Kickaxe',
+      durationMs: 20000,
+      coverImageURL: makeDemoCover('#353535',
+        '<polygon fill="#ec742c" points="150,55 173.5,117.6 240.4,120.6 188,162.4 205.8,226.9 150,190 94.2,226.9 112,162.4 59.6,120.6 126.5,117.6"/>') }
+  ];
+
+  let ti = 0;
+
+  function playOne() {
+    const t = tracks[ti % tracks.length];
+    ti++;
+
+    handlePayload({
+      widget: 'kickaxe-spotify', kind: 'nowplaying',
+      trackId: t.trackId, trackName: t.trackName, artists: t.artists,
+      coverImageURL: t.coverImageURL,
+      isPlaying: true, progressMs: 0, durationMs: t.durationMs
+    });
+
+    // Au 2e morceau : simule une pause de 3 s au milieu (badge + barre gelée)
+    if (ti % tracks.length === 2) {
+      setTimeout(function () {
+        handlePayload({ widget: 'kickaxe-spotify', kind: 'paused',
+          trackId: t.trackId, trackName: t.trackName, artists: t.artists,
+          coverImageURL: t.coverImageURL,
+          isPlaying: false, progressMs: Math.floor(t.durationMs / 2), durationMs: t.durationMs });
+        setTimeout(function () {
+          handlePayload({ widget: 'kickaxe-spotify', kind: 'resumed',
+            trackId: t.trackId, trackName: t.trackName, artists: t.artists,
+            coverImageURL: t.coverImageURL,
+            isPlaying: true, progressMs: Math.floor(t.durationMs / 2), durationMs: t.durationMs });
+        }, 6000); // pause volontairement longue en démo : laisse voir le masquage auto
+      }, Math.floor(t.durationMs / 2));
+    }
+
+    setTimeout(playOne, t.durationMs + 1200);
+  }
+
+  playOne();
+}
+
+/* =========================================================================
+   MODE DIRECT (sans Streamer.bot) — dialogue avec Spotify depuis le widget.
+
+   Activation : ?clientId=<identifiant de votre app Spotify>
+   Autorisation : PKCE (aucun secret dans le fichier — c'est le schéma prévu pour les
+   applications qui tournent dans un navigateur). Le jeton est conservé localement et
+   renouvelé tout seul.
+
+   ⚠ PRÉREQUIS : la page doit être servie en HTTPS (hébergement statique), car Spotify
+   n'accepte que des adresses de retour en https (ou 127.0.0.1). Un fichier ouvert
+   directement depuis le disque ne peut pas fonctionner en mode direct.
+
+   AVANTAGE DÉCISIF : la position est relue toutes les ~2 s → la barre se resynchronise
+   en permanence, y compris quand on déplace manuellement la lecture.
+   ========================================================================= */
+const AUTH = {
+  authorize: 'https://accounts.spotify.com/authorize',
+  token:     'https://accounts.spotify.com/api/token',
+  scope:     'user-read-playback-state user-read-currently-playing', // LECTURE SEULE
+  keyTok:    'kx_np_tokens',
+  keyVer:    'kx_np_verifier'
+};
+
+function b64url(buf) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function randomString(len) {
+  const a = new Uint8Array(len);
+  crypto.getRandomValues(a);
+  return Array.from(a, function (b) { return ('0' + (b % 36).toString(36)).slice(-1); }).join('');
+}
+function sha256(str) {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+}
+function redirectUri() {
+  // Adresse de retour = cette page, sans paramètres. À déclarer à l'identique dans l'app Spotify.
+  return location.origin + location.pathname;
+}
+function loadTokens() {
+  try { return JSON.parse(localStorage.getItem(AUTH.keyTok) || 'null'); } catch (e) { return null; }
+}
+function saveTokens(t) {
+  try { localStorage.setItem(AUTH.keyTok, JSON.stringify(t)); } catch (e) { /* stockage indispo */ }
+}
+
+function beginAuth() {
+  const verifier = randomString(64);
+  try { localStorage.setItem(AUTH.keyVer, verifier); } catch (e) { /* noop */ }
+  sha256(verifier).then(function (hash) {
+    const p = new URLSearchParams({
+      client_id: CONFIG.clientId,
+      response_type: 'code',
+      redirect_uri: redirectUri(),
+      code_challenge_method: 'S256',
+      code_challenge: b64url(hash),
+      scope: AUTH.scope
+    });
+    location.replace(AUTH.authorize + '?' + p.toString());
+  });
+}
+
+function exchangeCode(code) {
+  const verifier = localStorage.getItem(AUTH.keyVer) || '';
+  const body = new URLSearchParams({
+    client_id: CONFIG.clientId,
+    grant_type: 'authorization_code',
+    code: code,
+    redirect_uri: redirectUri(),
+    code_verifier: verifier
+  });
+  return fetch(AUTH.token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.access_token) throw new Error(j.error_description || 'autorisation refusée');
+    saveTokens({ access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in - 60) * 1000 });
+    // On retire le code de l'adresse (il est à usage unique) en conservant les autres réglages
+    const keep = new URLSearchParams(location.search);
+    keep.delete('code'); keep.delete('state');
+    const qs = keep.toString();
+    history.replaceState({}, '', redirectUri() + (qs ? '?' + qs : ''));
+  });
+}
+
+function refreshTokens() {
+  const t = loadTokens();
+  if (!t || !t.refresh) return Promise.reject(new Error('pas de jeton de renouvellement'));
+  const body = new URLSearchParams({
+    client_id: CONFIG.clientId,
+    grant_type: 'refresh_token',
+    refresh_token: t.refresh
+  });
+  return fetch(AUTH.token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.access_token) throw new Error('renouvellement refusé');
+    saveTokens({ access: j.access_token, refresh: j.refresh_token || t.refresh, exp: Date.now() + (j.expires_in - 60) * 1000 });
+    return j.access_token;
+  });
+}
+
+function validToken() {
+  const t = loadTokens();
+  if (!t) return Promise.reject(new Error('non autorisé'));
+  if (Date.now() < t.exp) return Promise.resolve(t.access);
+  return refreshTokens();
+}
+
+// Traduit la réponse Spotify vers le MÊME contrat que le mode Streamer.bot :
+// tout le rendu (mises en page, couleurs, pause, canvas) reste strictement identique.
+function applyFromSpotify(d) {
+  const item = d && d.item;
+  if (!item) { hideCard(); return; }
+  const img = (item.album && item.album.images && item.album.images[0]) ? item.album.images[0].url : '';
+  handlePayload({
+    widget: 'kickaxe-music',
+    trackId: item.id || '',
+    trackName: item.name || '',
+    artists: (item.artists || []).map(function (a) { return a.name; }).join(', '),
+    coverImageURL: img,
+    isPlaying: !!d.is_playing,
+    progressMs: num(d.progress_ms, 0),
+    durationMs: num(item.duration_ms, 0)
+  });
+}
+
+let pollTimer = null;
+function pollOnce() {
+  validToken().then(function (tok) {
+    return fetch('https://api.spotify.com/v1/me/player?additional_types=track', {
+      headers: { Authorization: 'Bearer ' + tok }
+    });
+  }).then(function (r) {
+    if (r.status === 204) { hideCard(); return null; }   // rien en lecture
+    if (r.status === 401) { return refreshTokens().then(function () { return null; }); }
+    if (r.status === 429) {                              // trop d'appels : on ralentit
+      const wait = parseInt(r.headers.get('Retry-After') || '5', 10);
+      diag.ws = 'Spotify limite les appels — pause de ' + wait + ' s';
+      renderDiag();
+      schedulePoll(wait * 1000);
+      return null;
+    }
+    if (!r.ok) return null;
+    return r.json();
+  }).then(function (j) {
+    if (j) {
+      diag.ws = 'MODE DIRECT — connecté ✅';
+      diag.msgTotal++; diag.msgReco++;
+      if (CONFIG.debug) diag.lastRaw = { source: 'spotify', is_playing: j.is_playing, progress_ms: j.progress_ms };
+      renderDiag();
+      applyFromSpotify(j);
+    }
+    schedulePoll();
+  }).catch(function (e) {
+    diag.ws = 'MODE DIRECT — ' + (e && e.message ? e.message : 'erreur');
+    renderDiag();
+    schedulePoll(5000);                                   // on réessaie posément
+  });
+}
+function schedulePoll(delay) {
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = setTimeout(pollOnce, delay || CONFIG.pollMs);
+}
+
+function startDirectMode() {
+  const q = new URLSearchParams(location.search);
+  if (location.protocol === 'file:') {
+    diag.ws = 'MODE DIRECT impossible : la page doit être servie en https (voir README)';
+    renderDiag();
+    return;
+  }
+  if (q.has('code')) {                                    // retour d'autorisation
+    exchangeCode(q.get('code')).then(pollOnce).catch(function (e) {
+      diag.ws = 'Autorisation échouée : ' + e.message;
+      renderDiag();
+    });
+    return;
+  }
+  if (!loadTokens()) { beginAuth(); return; }             // première fois : on demande l'accord
+  pollOnce();
+}
+
+/* ----- Démarrage ----- */
+if (CONFIG.debug) renderDiag();
+if (CONFIG.test) {
+  runTest();
+} else if (CONFIG.clientId) {
+  startDirectMode();          // sans Streamer.bot
+} else {
+  connect();                  // via le WebSocket de Streamer.bot
+}
+</script>
+</body>
+</html>
