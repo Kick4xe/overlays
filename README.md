@@ -1,4 +1,4 @@
-# Now Playing (overlay musique pour OBS)
+# StreamUp : Now Playing - Twitch Widget
 
 Petite carte qui affiche la musique en cours pendant le stream : pochette, titre, artiste,
 barre de progression et temps. Elle disparaît toute seule quand la lecture est en pause.
@@ -31,7 +31,8 @@ Il faut par contre héberger le fichier sur une page en HTTPS, parce que Spotify
 adresses de retour en local. GitHub Pages fait ça gratuitement, et ça prend cinq minutes.
 
 1. Mettez `spotify-nowplaying.html` sur GitHub Pages (ou Netlify, ou Cloudflare Pages).
-   Vous obtenez une adresse du genre `https://votrenom.github.io/overlays/spotify-nowplaying.html`.
+   Vous obtenez une adresse du genre
+   `https://votrenom.github.io/streamup-now_playing-twitch_widget/spotify-nowplaying.html`.
 2. Sur developer.spotify.com, créez une app. Dans « Redirect URI », collez exactement
    l'adresse de l'étape 1, sans rien après. Cochez « Web API ». Notez le Client ID
    (le Client secret ne sert pas ici).
