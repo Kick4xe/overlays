@@ -193,24 +193,47 @@
       </fieldset>
 
       <fieldset>
+        <legend>CONNEXION — CHOISISSEZ UNE MÉTHODE</legend>
+        <label>Comment le widget reçoit la musique</label>
+        <select id="mode">
+          <option value="direct">Directement depuis Spotify (rien à installer)</option>
+          <option value="sb">Via Streamer.bot (extension + action)</option>
+        </select>
+        <p class="hint">C'est <b>l'un ou l'autre</b>, pas les deux : le widget utilise le mode direct
+           dès qu'un identifiant Spotify est renseigné, et écoute Streamer.bot sinon.</p>
+
+        <div id="directBlock">
+          <label>Identifiant Spotify (Client ID de votre app)</label>
+          <input id="clientId" placeholder="Client ID de votre app Spotify">
+          <button type="button" class="ghost" style="margin-top:8px;width:100%" onclick="openAuth()">
+            1. Connecter Spotify (ouvre un onglet)
+          </button>
+          <label>2. Jeton obtenu (collez ici l'adresse ou le jeton copié)</label>
+          <input id="token" placeholder="collez ici — le jeton sera extrait automatiquement">
+          <p class="hint">Nécessite Spotify Premium et un hébergement en https. Le jeton évite de
+             devoir se reconnecter dans la fenêtre « Interagir » d'OBS — gardez cette adresse
+             pour vous.</p>
+        </div>
+
+        <div id="sbBlock">
+          <div class="row">
+            <div><label>Hôte WebSocket</label><input id="host" value="127.0.0.1"></div>
+            <div><label>Port</label><input id="port" type="number" value="8080"></div>
+          </div>
+          <p class="hint">Nécessite Streamer.bot avec une extension Spotify et l'action « pont »
+             (voir le README). La barre de progression est alors moins précise : la position
+             n'est relue qu'aux changements de morceau, pause et reprise.</p>
+          <label>Décalage de la barre (ms)
+            <span title="Si la barre est en retard sur la musique, augmentez. Si elle est en avance, mettez une valeur négative.">ⓘ</span>
+          </label>
+          <input id="offset" type="number" value="0" step="250">
+        </div>
+      </fieldset>
+
+      <fieldset>
         <legend>COMPORTEMENT</legend>
-        <label>Identifiant Spotify (mode direct, sans Streamer.bot)</label>
-        <input id="clientId" placeholder="Client ID de votre app Spotify">
-        <button type="button" class="ghost" style="margin-top:8px;width:100%" onclick="openAuth()">
-          1. Connecter Spotify (ouvre un onglet)
-        </button>
-        <label>2. Jeton obtenu (colle ici l'adresse ou le jeton copié)</label>
-        <input id="token" placeholder="colle ici — le jeton sera extrait automatiquement">
         <label>Masquer après une pause (ms, 0 = jamais)</label>
         <input id="hidePaused" type="number" value="3000" step="500" min="0">
-        <label>Décalage de la barre (ms) 
-          <span title="Si la barre est en retard sur la musique, augmentez. Si elle est en avance, mettez une valeur négative.">ⓘ</span>
-        </label>
-        <input id="offset" type="number" value="0" step="250">
-        <div class="row">
-          <div><label>Hôte WebSocket</label><input id="host" value="127.0.0.1"></div>
-          <div><label>Port</label><input id="port" type="number" value="8080"></div>
-        </div>
       </fieldset>
     </div>
 
@@ -245,7 +268,7 @@
 
 <script>
 "use strict";
-const ids = ['base','file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','clientId','token','host','port','player'];
+const ids = ['base','file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','mode','clientId','token','host','port','player'];
 const $ = id => document.getElementById(id);
 const hex = v => (v || '').replace(/^#/, '');
 
@@ -266,19 +289,22 @@ function buildQuery(withTest) {
   const pa = $('panelalpha').value;      if (pa && pa !== '0.92') p.push('panelalpha=' + pa);
   const font = $('font').value.trim();   if (font) p.push('font=' + encodeURIComponent(font));
   const hp = $('hidePaused').value;      if (hp !== '3000') p.push('hidePaused=' + hp);
-  const off = $('offset').value;         if (off && off !== '0') p.push('offset=' + off);
+  const off = $('offset').value;         if (off && off !== '0' && $('mode').value === 'sb') p.push('offset=' + off);
   const align = $('align').value;        if (align) p.push('align=' + align);
   if ($('bar').value === '0')    p.push('bar=0');
   if ($('times').value === '0')  p.push('times=0');
   if ($('shadow').value === '0') p.push('shadow=0');
   const blur = $('blur').value;          if (blur && blur !== '22') p.push('blur=' + blur);
-  const cid = $('clientId').value.trim();  if (cid) p.push('clientId=' + encodeURIComponent(cid));
-  // Le jeton peut être collé seul OU sous forme d'adresse complète : on extrait ce qu'il faut
-  const rawTok = $('token').value.trim();
-  const tok = rawTok.indexOf('token=') >= 0 ? decodeURIComponent(rawTok.split('token=')[1].split('&')[0]) : rawTok;
-  if (tok && !withTest) p.push('token=' + encodeURIComponent(tok));
-  const host = $('host').value.trim();   if (host && host !== '127.0.0.1') p.push('host=' + host);
-  const port = $('port').value;          if (port && port !== '8080') p.push('port=' + port);
+  const cid = $('clientId').value.trim();
+  // Mode direct : identifiant + éventuel jeton. Mode Streamer.bot : hôte/port + décalage.
+  if ($('mode').value === 'direct') {
+    if (cid) p.push('clientId=' + encodeURIComponent(cid));
+    const rawTok = $('token').value.trim();
+    const tok = rawTok.indexOf('token=') >= 0 ? decodeURIComponent(rawTok.split('token=')[1].split('&')[0]) : rawTok;
+    if (tok && !withTest) p.push('token=' + encodeURIComponent(tok));
+  }
+  const host = $('host').value.trim();   if (host && host !== '127.0.0.1' && $('mode').value === 'sb') p.push('host=' + host);
+  const port = $('port').value;          if (port && port !== '8080' && $('mode').value === 'sb') p.push('port=' + port);
   return p.length ? '?' + p.join('&') : '';
 }
 
@@ -314,6 +340,10 @@ function openAuth() {
 
 function render() {
   const layout = $('layout').value;
+  // Un seul mode de connexion à la fois : on masque les champs de l'autre
+  const direct = ($('mode').value === 'direct');
+  $('directBlock').style.display = direct ? 'block' : 'none';
+  $('sbBlock').style.display = direct ? 'none' : 'block';
   const isBanner = (layout === 'horizontal' || layout === 'mini');
   // La taille de pochette ne concerne que les bandeaux ; le format média, que la carte verticale
   $('coverRow').style.display = isBanner ? 'block' : 'none';
