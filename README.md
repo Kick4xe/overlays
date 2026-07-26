@@ -132,6 +132,9 @@ Tout se passe dans l'adresse. Le configurateur les génère pour vous, mais voic
 | `?bar=0` / `?times=0` | Masquer la barre / les temps |
 | `?shadow=0` | Sans ombre portée |
 | `?blur=22` | Flou du fond derrière la pochette |
+| `?eq=1` | Petit égaliseur animé pendant la lecture |
+| `?scroll=1` | Titre défilant au lieu d'être coupé |
+| `?autocolor=1` | Couleur d'accent tirée de la pochette du morceau |
 | `?hidePaused=3000` | Masquer après X ms de pause (0 = jamais) |
 | `?offset=1500` | Décale la barre si elle est en retard (méthode 2 seulement) |
 | `?clientId=` | Votre Client ID Spotify (méthode 1) |

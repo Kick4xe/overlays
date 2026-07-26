@@ -261,6 +261,46 @@
   /* --- Bloc texte --- */
   #info { padding: 11px 13px 13px; }
 
+  /* Égaliseur animé (?eq=1) : trois barres qui bougent pendant la lecture, figées en pause.
+     Signale d'un coup d'œil que la musique tourne, sans texte supplémentaire. */
+  #eq { display: none; gap: 3px; align-items: flex-end; height: 11px; margin-bottom: 6px; }
+  body.eq #eq { display: flex; }
+  body.align-center.eq #eq { justify-content: center; }
+  body.align-right.eq #eq { justify-content: flex-end; }
+  #eq i {
+    width: 3px;
+    height: 100%;
+    border-radius: 1px;
+    background: var(--orange);
+    transform-origin: bottom;
+    animation: eqBar 0.9s ease-in-out infinite;
+  }
+  #eq i:nth-child(2) { animation-delay: 0.18s; }
+  #eq i:nth-child(3) { animation-delay: 0.36s; }
+  #card.paused #eq i { animation-play-state: paused; opacity: 0.5; }
+  @keyframes eqBar {
+    0%, 100% { transform: scaleY(0.35); }
+    50%      { transform: scaleY(1); }
+  }
+
+  /* Titre défilant (?scroll=1) : au lieu de couper un long titre, on le fait glisser.
+     Le texte est dupliqué pour que la boucle soit continue. */
+  body.scroll #trackName {
+    display: block;
+    -webkit-line-clamp: unset;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  body.scroll #trackName .marq {
+    display: inline-block;
+    animation: marq 14s linear infinite;
+  }
+  #card.paused .marq { animation-play-state: paused; }
+  @keyframes marq {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
   #trackName {
     color: var(--cream);
     font-size: 15px;
@@ -362,6 +402,7 @@
         <div id="pauseBadge">EN PAUSE</div>
       </div>
       <div id="info">
+        <div id="eq"><i></i><i></i><i></i></div>
         <div id="trackName"></div>
         <div id="artists"></div>
         <div id="progressWrap">
@@ -425,7 +466,9 @@ const CONFIG = {
   test: false,              // ?test=1 : démo sans Streamer.bot
   canvasApi: '',            // V2 canvas : URL du micro-service (?canvasApi=...), vide = désactivé
   clientId: '',             // MODE DIRECT (?clientId=) : dialogue avec Spotify sans intermédiaire
-  pollMs: 2000              // MODE DIRECT : fréquence d'interrogation (?poll=, 1000 minimum)
+  pollMs: 2000,             // MODE DIRECT : fréquence d'interrogation (?poll=, 1000 minimum)
+  scroll: false,            // ?scroll=1 : titre défilant au lieu d'être coupé
+  autoColor: false          // ?autocolor=1 : couleur d'accent tirée de la pochette
 };
 
 (function applyUrlOverrides() {
@@ -480,6 +523,9 @@ const CONFIG = {
   if (q.get('align') === 'right') document.body.classList.add('align-right');
   if (q.get('shadow') === '0') document.body.classList.add('no-shadow');
   if (q.has('blur')) document.documentElement.style.setProperty('--bg-blur', num(q.get('blur'), 22) + 'px');
+  if (q.get('eq') === '1') document.body.classList.add('eq');
+  if (q.get('scroll') === '1') { document.body.classList.add('scroll'); CONFIG.scroll = true; }
+  if (q.get('autocolor') === '1') CONFIG.autoColor = true;
   if (q.has('canvasTest')) CONFIG.canvasTest = q.get('canvasTest'); // force ce .mp4 comme canvas
                                                                    // sur tous les morceaux (validation
                                                                    // du rendu sans micro-service)
@@ -635,8 +681,58 @@ function setTexts(name, artists) {
     void el.offsetWidth; // relance l'animation
     el.classList.add('swap-in');
   });
+  $art.textContent = artists || '';
+
+  if (!CONFIG.scroll) { $name.textContent = name || ''; return; }
+
+  // Titre défilant : on n'anime QUE si le texte dépasse vraiment (sinon ça bougerait pour rien).
+  // Le texte est écrit deux fois avec un écart, et l'animation translate de -50 % → boucle sans
+  // saut visible.
   $name.textContent = name || '';
-  $art.textContent  = artists || '';
+  requestAnimationFrame(function () {
+    if ($name.scrollWidth <= $name.clientWidth + 2) return;   // tient dans la largeur : on laisse
+    const span = document.createElement('span');
+    span.className = 'marq';
+    span.textContent = (name || '') + '\u00A0\u00A0\u2022\u00A0\u00A0' + (name || '') + '\u00A0\u00A0\u2022\u00A0\u00A0';
+    $name.textContent = '';
+    $name.appendChild(span);
+  });
+}
+
+/* ----- Couleur d'accent tirée de la pochette (?autocolor=1) -----
+   Échantillonne l'image en tout petit et retient la teinte la plus vive (assez saturée et ni
+   trop sombre ni trop claire), puis l'applique à la barre et à l'égaliseur. Si l'image refuse
+   d'être lue (règles de sécurité du navigateur), on garde simplement la couleur configurée. */
+function applyAutoColor(url) {
+  if (!CONFIG.autoColor || !url) return;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function () {
+    try {
+      const S = 24;
+      const cv = document.createElement('canvas');
+      cv.width = S; cv.height = S;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0, S, S);
+      const d = ctx.getImageData(0, 0, S, S).data;
+      let best = null, bestScore = -1;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        const lum = (max + min) / 2;
+        if (lum < 40 || lum > 225) continue;            // trop sombre ou trop clair
+        const sat = max === 0 ? 0 : (max - min) / max;
+        const score = sat * (1 - Math.abs(lum - 140) / 200);
+        if (score > bestScore) { bestScore = score; best = [r, g, b]; }
+      }
+      if (best && bestScore > 0.12) {
+        document.documentElement.style.setProperty(
+          '--orange', 'rgb(' + best[0] + ',' + best[1] + ',' + best[2] + ')');
+      }
+    } catch (e) { /* image non lisible : on garde la couleur configurée */ }
+  };
+  img.onerror = function () { /* idem */ };
+  img.src = url;
 }
 
 /* ----- Réception d'un état « now playing » ----- */
@@ -659,6 +755,7 @@ function applyNowPlaying(d, isNewSong) {
   if (changed) {
     setTexts(d.trackName, d.artists);
     setCover(d.coverImageURL);
+    applyAutoColor(d.coverImageURL);
     // V2 canvas : si la source fournit déjà l'URL, on l'utilise ; sinon le widget la récupère
     // lui-même via le micro-service (?canvasApi=). Dans tous les cas, repli pochette si absent.
     if (CONFIG.canvasTest) setCanvas(CONFIG.canvasTest);

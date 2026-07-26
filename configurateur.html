@@ -73,8 +73,20 @@
   .hint a { color:var(--accent); }
   .hint code { background:rgba(251,249,241,.1); padding:1px 4px; border-radius:4px; }
   iframe { width:100%; height:clamp(340px, 58vh, 760px); border:0; border-radius:12px;
-           background:#0d0d0f; margin-top:14px; }
+           background:transparent; display:block; }
   @media (max-width: 980px) { iframe { height:clamp(280px, 46vh, 520px); } }
+  /* Fond de l'aperçu commutable : l'overlay sera posé sur une image de jeu, pas sur du gris.
+     Pouvoir tester la lisibilité sur clair/sombre/coloré évite les mauvaises surprises. */
+  #pvwrap { margin-top:10px; border-radius:12px; overflow:hidden; background:#0d0d0f; }
+  #pvwrap.light { background:#e9e9ea; }
+  #pvwrap.game  { background:linear-gradient(135deg,#1b3a5c,#7a3b8f 45%,#c2632b); }
+  #pvwrap.grid  { background-color:#2a2a2e;
+    background-image:linear-gradient(45deg,#3a3a40 25%,transparent 25%,transparent 75%,#3a3a40 75%),
+                     linear-gradient(45deg,#3a3a40 25%,transparent 25%,transparent 75%,#3a3a40 75%);
+    background-size:20px 20px; background-position:0 0,10px 10px; }
+  .pvbar { display:flex; align-items:center; gap:6px; margin-top:14px; font-size:11.5px; opacity:.7; }
+  .pvbar span { margin-right:2px; }
+  .pvbar button { flex:0 0 auto; padding:5px 10px; font-size:11.5px; background:rgba(251,249,241,.12); }
 </style>
 </head>
 <body>
@@ -171,6 +183,16 @@
           </div>
           <div><label>Flou du fond (px)</label><input id="blur" type="number" value="22" min="0" max="60"></div>
         </div>
+        <div class="row">
+          <div><label>Égaliseur animé</label>
+            <select id="eq"><option value="">Non</option><option value="1">Oui</option></select>
+          </div>
+          <div><label>Titre défilant</label>
+            <select id="scroll"><option value="">Non (coupé)</option><option value="1">Oui</option></select>
+          </div>
+        </div>
+        <label>Couleur d'accent tirée de la pochette</label>
+        <select id="autocolor"><option value="">Non (couleur fixe)</option><option value="1">Oui, elle change à chaque morceau</option></select>
       </fieldset>
 
       <fieldset>
@@ -244,6 +266,7 @@
         <div class="btns">
           <button onclick="copyUrl()">Copier l'adresse</button>
           <button class="ghost" onclick="preview()">Appliquer à l'aperçu</button>
+          <button class="ghost" style="flex:0 0 auto;padding:10px 14px" onclick="resetAll()" title="Tout remettre par défaut">↺</button>
         </div>
         <p class="hint">
           Dans OBS : source <b>Navigateur</b> → collez cette adresse complète dans le champ URL.
@@ -258,7 +281,14 @@
           avez fini, recopiez l'adresse et remplacez celle de votre source.
         </p>
       </div>
-      <iframe id="prev"></iframe>
+      <div class="pvbar">
+        <span>Fond de l'aperçu :</span>
+        <button type="button" onclick="setBg('dark')">Sombre</button>
+        <button type="button" onclick="setBg('light')">Clair</button>
+        <button type="button" onclick="setBg('game')">Coloré</button>
+        <button type="button" onclick="setBg('grid')">Damier</button>
+      </div>
+      <div id="pvwrap"><iframe id="prev"></iframe></div>
       <p class="hint" style="text-align:center; margin-top:14px">
         Un projet <b>StreamUp</b>, par <b>Kickaxe</b> · <a href="https://twitch.tv/kick4xe" target="_blank">twitch.tv/kick4xe</a> · 2026
         <br><a href="https://github.com/Kick4xe/streamup-now_playing-twitch_widget" target="_blank">Dépôt et mode d'emploi complet</a>
@@ -268,7 +298,7 @@
 
 <script>
 "use strict";
-const ids = ['base','file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','hidePaused','offset','mode','clientId','token','host','port','player'];
+const ids = ['base','file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','eq','scroll','autocolor','hidePaused','offset','mode','clientId','token','host','port','player'];
 const $ = id => document.getElementById(id);
 const hex = v => (v || '').replace(/^#/, '');
 
@@ -295,6 +325,9 @@ function buildQuery(withTest) {
   if ($('times').value === '0')  p.push('times=0');
   if ($('shadow').value === '0') p.push('shadow=0');
   const blur = $('blur').value;          if (blur && blur !== '22') p.push('blur=' + blur);
+  if ($('eq').value === '1')        p.push('eq=1');
+  if ($('scroll').value === '1')    p.push('scroll=1');
+  if ($('autocolor').value === '1') p.push('autocolor=1');
   const cid = $('clientId').value.trim();
   // Mode direct : identifiant + éventuel jeton. Mode Streamer.bot : hôte/port + décalage.
   if ($('mode').value === 'direct') {
@@ -457,6 +490,17 @@ function copyUrl() {
 }
 
 function preview() { $('prev').src = fullUrl(buildQuery(true)); }
+
+// Fond de l'aperçu : l'overlay finira sur une image de jeu, pas sur du gris uniforme.
+function setBg(kind) {
+  const w = document.getElementById('pvwrap');
+  w.className = (kind === 'dark') ? '' : kind;
+}
+
+// Remise à zéro : on recharge la page, tous les champs reprennent leurs valeurs par défaut.
+function resetAll() {
+  if (confirm('Remettre tous les réglages par défaut ?')) location.reload();
+}
 
 // L'aperçu se recharge tout seul après chaque modification (avec un léger délai pour ne pas
 // recharger à chaque frappe). Sans ça, on croit qu'un réglage « ne fait rien » alors qu'il
