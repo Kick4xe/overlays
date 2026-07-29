@@ -319,10 +319,19 @@
         <label style="margin-top:0">Adresse à utiliser dans OBS</label>
         <code id="url">…</code>
         <div class="btns">
-          <button onclick="copyUrl()">Copier l'adresse</button>
-          <button class="ghost" onclick="preview()">Appliquer à l'aperçu</button>
-          <button class="ghost" style="flex:0 0 auto;padding:10px 14px" onclick="resetAll()" title="Tout remettre par défaut">↺</button>
+          <button onclick="copyUrl()">⬇ Copier l'adresse pour OBS</button>
+          <button class="ghost" onclick="preview()" title="Recharge uniquement l'aperçu ci-dessous">⟳ Recharger l'aperçu</button>
+          <button class="ghost" style="flex:0 0 auto;padding:10px 14px" onclick="resetAll()" title="Tout remettre par défaut et oublier les réglages mémorisés">↺</button>
         </div>
+        <p class="hint warn">
+          <b>Attention à ne pas confondre :</b> l'aperçu ci-dessous se met à jour tout seul, mais
+          <b>votre overlay dans OBS ne change pas</b> tant que vous n'y avez pas collé la nouvelle
+          adresse. Le rendu final se joue en deux temps :
+          <br>1. vous réglez et vous contrôlez dans l'aperçu ;
+          <br>2. vous cliquez sur <b>Copier l'adresse pour OBS</b>, puis vous remplacez l'URL de
+          votre source Navigateur dans OBS.
+          <br><span id="saveState"></span>
+        </p>
         <p class="hint">
           Dans OBS : source <b>Navigateur</b> → collez cette adresse complète dans le champ URL.
           Largeur ~<span id="obsw">300</span>, hauteur ~<span id="obsh">520</span>.
@@ -410,7 +419,7 @@ function applyPreset(name) {
   const p = PRESETS[name];
   if (!p) return;
   Object.keys(p).forEach(function (k) { if ($(k)) $(k).value = p[k]; });
-  render(); preview();
+  render(); preview(); saveCfg();
 }
 
 function fullUrl(q) {
@@ -557,9 +566,47 @@ function setBg(kind) {
   w.className = (kind === 'dark') ? '' : kind;
 }
 
-// Remise à zéro : on recharge la page, tous les champs reprennent leurs valeurs par défaut.
+// Remise à zéro : on oublie les réglages mémorisés, puis on recharge la page.
 function resetAll() {
-  if (confirm('Remettre tous les réglages par défaut ?')) location.reload();
+  if (!confirm('Remettre tous les réglages par défaut et oublier ceux mémorisés dans ce navigateur ?')) return;
+  try { localStorage.removeItem(STORE); } catch (e) { /* stockage indisponible */ }
+  location.reload();
+}
+
+/* ----- Mémorisation des réglages dans le navigateur -----
+   Évite de tout refaire à la main quand on revient régler un détail plus tard.
+   ⚠ Le JETON n'est volontairement PAS mémorisé : c'est une donnée de connexion, elle n'a pas
+   à traîner dans le stockage du navigateur. Il n'est de toute façon utile qu'une seule fois. */
+const STORE = 'kx_np_cfg';
+const NO_SAVE = ['token'];
+
+function saveCfg() {
+  const data = {};
+  ids.forEach(function (id) { if (NO_SAVE.indexOf(id) < 0) data[id] = $(id).value; });
+  try {
+    localStorage.setItem(STORE, JSON.stringify(data));
+    setSaveState('Réglages mémorisés dans ce navigateur ✓');
+  } catch (e) {
+    setSaveState('Réglages non mémorisés (stockage du navigateur indisponible).');
+  }
+}
+
+function loadCfg() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { return false; }
+  if (!data) return false;
+  Object.keys(data).forEach(function (id) {
+    // On ignore les clés inconnues : un ancien enregistrement ne doit pas casser une
+    // version plus récente du configurateur.
+    if ($(id) && typeof data[id] === 'string') $(id).value = data[id];
+  });
+  setSaveState('Réglages repris de votre dernière visite.');
+  return true;
+}
+
+function setSaveState(txt) {
+  const el = $('saveState');
+  if (el) el.textContent = txt;
 }
 
 // L'aperçu se recharge tout seul après chaque modification (avec un léger délai pour ne pas
@@ -572,16 +619,17 @@ function schedulePreview() {
 }
 
 ids.forEach(id => {
-  $(id).addEventListener('input', function () { render(); schedulePreview(); });
-  $(id).addEventListener('change', function () { render(); schedulePreview(); });
+  $(id).addEventListener('input', function () { render(); schedulePreview(); saveCfg(); });
+  $(id).addEventListener('change', function () { render(); schedulePreview(); saveCfg(); });
 });
 // Changer de mise en page réinitialise la largeur sur le défaut de cette mise en page
 $('layout').addEventListener('change', function () {
   const l = $('layout').value;
   $('w').value = l === 'mini' ? 300 : (l === 'horizontal' ? 340 : (l === 'text' ? 320 : (l === 'bare' ? 420 : 240)));
   $('cover').value = l === 'mini' ? 60 : 84;
-  render(); preview();
+  render(); preview(); saveCfg();
 });
+loadCfg();      // avant le premier rendu : les champs reprennent la dernière configuration
 render();
 preview();
 </script>
