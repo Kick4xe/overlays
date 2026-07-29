@@ -157,8 +157,63 @@
           <div><label>Fond de carte</label><input id="panel" type="color" value="#353535"></div>
           <div><label>Opacité du fond</label><input id="panelalpha" type="number" value="0.92" step="0.02" min="0" max="1"></div>
         </div>
-        <label>Police (Google Fonts, vide = Poppins)</label>
-        <input id="font" placeholder="Inter, Montserrat…">
+        <label>Police (Google Fonts)</label>
+        <select id="font">
+          <option value="">Poppins (par défaut)</option>
+          <optgroup label="Sans-serif — lisibles">
+            <option>Inter</option>
+            <option>Roboto</option>
+            <option>Open Sans</option>
+            <option>Lato</option>
+            <option>Montserrat</option>
+            <option>Raleway</option>
+            <option>Nunito</option>
+            <option>Rubik</option>
+            <option>Work Sans</option>
+            <option>DM Sans</option>
+            <option>Manrope</option>
+            <option>Outfit</option>
+            <option>Sora</option>
+            <option>Space Grotesk</option>
+            <option>Barlow</option>
+            <option>Archivo</option>
+            <option>Titillium Web</option>
+            <option>Fira Sans</option>
+            <option>Josefin Sans</option>
+            <option>Quicksand</option>
+            <option>Comfortaa</option>
+          </optgroup>
+          <optgroup label="Condensées et affirmées">
+            <option>Oswald</option>
+            <option>Teko</option>
+            <option>Kanit</option>
+            <option>Chakra Petch</option>
+            <option>Exo 2</option>
+            <option>Bebas Neue</option>
+            <option>Anton</option>
+          </optgroup>
+          <optgroup label="Gaming et display">
+            <option>Righteous</option>
+            <option>Orbitron</option>
+            <option>Audiowide</option>
+            <option>Michroma</option>
+            <option>Press Start 2P</option>
+            <option>VT323</option>
+          </optgroup>
+          <optgroup label="Serif">
+            <option>Playfair Display</option>
+            <option>Lora</option>
+            <option>Merriweather</option>
+          </optgroup>
+          <option value="__custom">Autre (saisir le nom exact…)</option>
+        </select>
+        <div id="fontCustomRow" style="display:none">
+          <label>Nom exact de la police sur fonts.google.com</label>
+          <input id="fontCustom" placeholder="ex. Cabin Condensed">
+        </div>
+        <p class="hint">Les polices « display » (Bebas Neue, Anton, Press Start 2P, VT323…)
+           n'existent qu'en une seule graisse : le gras du titre sera imité par le navigateur.
+           Sur un overlay ça passe très bien, vérifiez juste dans l'aperçu.</p>
       </fieldset>
 
       <fieldset>
@@ -298,7 +353,7 @@
 
 <script>
 "use strict";
-const ids = ['base','file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','align','bar','times','shadow','blur','eq','scroll','autocolor','hidePaused','offset','mode','clientId','token','host','port','player'];
+const ids = ['base','file','layout','cover','w','media','radius','accent','text','panel','panelalpha','font','fontCustom','align','bar','times','shadow','blur','eq','scroll','autocolor','hidePaused','offset','mode','clientId','token','host','port','player'];
 const $ = id => document.getElementById(id);
 const hex = v => (v || '').replace(/^#/, '');
 
@@ -317,7 +372,10 @@ function buildQuery(withTest) {
   const text = hex($('text').value);     if (text.toLowerCase() !== 'fbf9f1') p.push('text=' + text);
   const panel = hex($('panel').value);   if (panel.toLowerCase() !== '353535') p.push('panel=' + panel);
   const pa = $('panelalpha').value;      if (pa && pa !== '0.92') p.push('panelalpha=' + pa);
-  const font = $('font').value.trim();   if (font) p.push('font=' + encodeURIComponent(font));
+  // Police : soit un choix de la liste, soit une saisie libre (option « Autre »)
+  const fontSel = $('font').value;
+  const font = (fontSel === '__custom') ? $('fontCustom').value.trim() : fontSel;
+  if (font) p.push('font=' + encodeURIComponent(font));
   const hp = $('hidePaused').value;      if (hp !== '3000') p.push('hidePaused=' + hp);
   const off = $('offset').value;         if (off && off !== '0' && $('mode').value === 'sb') p.push('offset=' + off);
   const align = $('align').value;        if (align) p.push('align=' + align);
@@ -377,6 +435,8 @@ function render() {
   const direct = ($('mode').value === 'direct');
   $('directBlock').style.display = direct ? 'block' : 'none';
   $('sbBlock').style.display = direct ? 'none' : 'block';
+  // Le champ de saisie libre n'apparaît que si l'option « Autre » est choisie
+  $('fontCustomRow').style.display = ($('font').value === '__custom') ? 'block' : 'none';
   const isBanner = (layout === 'horizontal' || layout === 'mini');
   // La taille de pochette ne concerne que les bandeaux ; le format média, que la carte verticale
   $('coverRow').style.display = isBanner ? 'block' : 'none';
