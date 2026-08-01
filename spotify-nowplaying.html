@@ -60,6 +60,11 @@
     border-radius: var(--radius);
     overflow: hidden;
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+    /* Anti-crénelage des coins arrondis : `isolation` corrige le bug Chromium du clip arrondi
+       crénelé par un enfant transformé/flouté (le fond .bg), et le contour transparent force
+       le lissage du bord externe. Aucun effet visuel par eux-mêmes. */
+    isolation: isolate;
+    outline: 1px solid transparent;
 
     /* cachée par défaut : n'apparaît qu'avec des données */
     opacity: 0;
@@ -67,7 +72,9 @@
     transition: opacity 0.45s ease, transform 0.45s ease;
     pointer-events: none;
   }
-  #card.visible { opacity: 1; transform: translateY(0) scale(1); }
+  /* Au repos, AUCUN transform (none = identité, la transition reste fluide) : une carte qui
+     garde un transform reste rastérisée en couche composée, et son clip arrondi crénelle. */
+  #card.visible { opacity: 1; transform: none; }
 
   /* --- Zone média (portrait 9:16, comme le mode Gallery d'Amuse / les Canvas Spotify).
      V1 : fond = pochette floutée/assombrie plein cadre + pochette nette centrée.
@@ -78,6 +85,7 @@
     aspect-ratio: var(--media-ratio);
     background: var(--dark);
     overflow: hidden;
+    isolation: isolate; /* clippe un enfant scale+blur : même correctif anti-crénelage */
   }
   #media .bg {
     position: absolute;
@@ -830,7 +838,7 @@ function tick() {
 requestAnimationFrame(tick);
 
 /* ----- Debug ----- */
-const WIDGET_VERSION = '2026-07-25 · mode direct';
+const WIDGET_VERSION = '2026-07-31 · anti-crénelage';
 const diag = { ws: 'jamais connecté', msgTotal: 0, msgReco: 0, lastTypes: [], lastRaw: null };
 
 function renderDiag() {
