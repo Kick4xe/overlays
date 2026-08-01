@@ -86,6 +86,9 @@
     background: var(--dark);
     overflow: hidden;
     isolation: isolate; /* clippe un enfant scale+blur : même correctif anti-crénelage */
+    /* La zone média porte elle-même l'arrondi des coins hauts de la carte : le clip du parent
+       n'a plus à tailler dans les images, ce qui adoucit nettement les bords. */
+    border-radius: var(--radius) var(--radius) 0 0;
   }
   #media .bg {
     position: absolute;
@@ -113,13 +116,15 @@
     transition: opacity 0.5s ease, filter 0.4s ease;
   }
   #media .cover.show { opacity: 1; }
-  /* En mode carré (?media=square), la pochette occupe tout le cadre */
+  /* En mode carré (?media=square), la pochette occupe tout le cadre.
+     Elle porte SON PROPRE arrondi sur les coins hauts (identique à la carte) : un bitmap qui
+     s'arrondit lui-même est lissé proprement, là où le rognage par le conteneur crénelle. */
   body.media-square #media .cover {
     width: 100%;
     height: 100%;
     left: 0; top: 0;
     transform: none;
-    border-radius: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
     box-shadow: none;
   }
   body.media-square #media .bg { display: none; }
@@ -138,6 +143,8 @@
     flex: 0 0 auto;
     width: var(--media-side, 84px);
     aspect-ratio: 1 / 1;
+    /* En bandeau, le média touche les coins GAUCHES de la carte : l'arrondi suit. */
+    border-radius: var(--radius) 0 0 var(--radius);
   }
   body.layout-horizontal #media .cover,
   body.layout-mini #media .cover {
@@ -145,7 +152,7 @@
     height: 100%;
     left: 0; top: 0;
     transform: none;
-    border-radius: 0;
+    border-radius: var(--radius) 0 0 var(--radius);
     box-shadow: none;
   }
   body.layout-horizontal #media .bg,
@@ -838,7 +845,7 @@ function tick() {
 requestAnimationFrame(tick);
 
 /* ----- Debug ----- */
-const WIDGET_VERSION = '2026-07-31 · anti-crénelage';
+const WIDGET_VERSION = '2026-07-31b · arrondis adoucis';
 const diag = { ws: 'jamais connecté', msgTotal: 0, msgReco: 0, lastTypes: [], lastRaw: null };
 
 function renderDiag() {
